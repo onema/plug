@@ -127,242 +127,241 @@ object UriParser {
     ////      port = -1;
     //
     //      // check first character; it could tell us if we're parsing an IPv6 address
-    //      var decode = false
-    //      if(current < length) {
-    //        var c = text(current)
-    //        switch(c) {
-    //          case '%':
-    //          case '+':
-    //          decode = true;
-    //          break;
-    //          case '[':
-    //            goto ipv6;
-    //        }
-    //      } else {
+    val (c, decode, ipv6) = if(current1 < length) {
+      text(current1) match {
+        case c1@('%' | '+') => (c1, true, false)
+        case c1@'[' => (c1, false, true)
+      }
+    } else {
+      (Steps.END_OF_STRING, false, false)
+    }
+    if(ipv6) {
+      TryParseIPv6(text, length, current1, parts)
+    } else {
+      None
+    }
+    //// parse hostname -OR- user-info
+    //string hostnameOrUsername;
+    //for(;;) {
+    //  if(
+    //    ((c >= 'a') && (c <= 'z')) ||
+    //      ((c >= 'A') && (c <= 'Z')) ||
+    //      ((c >= '0') && (c <= '9')) ||
+    //      ((c >= '$') && (c <= '.')) ||   // one of: $%&'()*+,-.
+    //      (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
+    //      char.IsLetterOrDigit(c)
+    //  ) {
     //
-    //        // use '\uFFFF' as end-of-string marker
-    //        c = END_OF_STRING;
-    //      }
+    //    // valid character, keep parsing
+    //  } else if(c == ':') {
     //
-    //      // parse hostname -OR- user-info
-    //      string hostnameOrUsername;
-    //      for(;;) {
-    //        if(
-    //          ((c >= 'a') && (c <= 'z')) ||
-    //            ((c >= 'A') && (c <= 'Z')) ||
-    //            ((c >= '0') && (c <= '9')) ||
-    //            ((c >= '$') && (c <= '.')) ||   // one of: $%&'()*+,-.
-    //            (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
-    //            char.IsLetterOrDigit(c)
-    //        ) {
+    //    // part before ':' is either a username or hostname
+    //    hostnameOrUsername = text.Substring(last, current - last);
+    //    last = current + 1;
+    //    goto hostnameOrUserInfoAfterColon;
+    //  } else if(c == '@') {
     //
-    //          // valid character, keep parsing
-    //        } else if(c == ':') {
+    //    // part before '@' must be username since we didn't find ':'
+    //    user = text.Substring(last, current - last);
+    //    if(decode) {
+    //      user = Decode(user);
+    //      decode = false;
+    //    }
+    //    last = current + 1;
+    //    goto hostnameOrIPv6Address;
+    //  } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
     //
-    //          // part before ':' is either a username or hostname
-    //          hostnameOrUsername = text.Substring(last, current - last);
-    //          last = current + 1;
-    //          goto hostnameOrUserInfoAfterColon;
-    //        } else if(c == '@') {
+    //    // part before '/', '\', '?', '#' must be hostname
+    //    if(decode) {
     //
-    //          // part before '@' must be username since we didn't find ':'
-    //          user = text.Substring(last, current - last);
-    //          if(decode) {
-    //            user = Decode(user);
-    //            decode = false;
-    //          }
-    //          last = current + 1;
-    //          goto hostnameOrIPv6Address;
-    //        } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
+    //      // hostname cannot contain encoded characters
+    //      return -1;
+    //    }
+    //    hostname = text.Substring(last, current - last);
+    //    next = (nextStep)c;
+    //    return current + 1;
+    //  } else {
+    //    return -1;
+    //  }
     //
-    //          // part before '/', '\', '?', '#' must be hostname
-    //          if(decode) {
+    //  // continue on by reading the next character
+    //  ++current;
+    //  if(current < length) {
+    //    c = text[current];
+    //    switch(c) {
+    //      case '%':
+    //      case '+':
+    //      decode = true;
+    //      break;
+    //    }
+    //  } else {
     //
-    //            // hostname cannot contain encoded characters
-    //            return -1;
-    //          }
-    //          hostname = text.Substring(last, current - last);
-    //          next = (nextStep)c;
-    //          return current + 1;
-    //        } else {
-    //          return -1;
-    //        }
+    //    // use '\uFFFF' as end-of-string marker
+    //    c = END_OF_STRING;
+    //  }
+    //}
+    //throw new ShouldNeverHappenException("hostnameOrUsername");
     //
-    //        // continue on by reading the next character
-    //        ++current;
-    //        if(current < length) {
-    //          c = text[current];
-    //          switch(c) {
-    //            case '%':
-    //            case '+':
-    //            decode = true;
-    //            break;
-    //          }
-    //        } else {
+    //// parse hostname -OR- user-info AFTER we're parsed a colon (':')
+    //hostnameOrUserInfoAfterColon:
+    //for(;;) {
+    //  ++current;
+    //  if(current < length) {
+    //    c = text[current];
+    //    switch(c) {
+    //      case '%':
+    //      case '+':
+    //      decode = true;
+    //      break;
+    //    }
+    //  } else {
     //
-    //          // use '\uFFFF' as end-of-string marker
-    //          c = END_OF_STRING;
-    //        }
-    //      }
-    //      throw new ShouldNeverHappenException("hostnameOrUsername");
+    //    // use '\uFFFF' as end-of-string marker
+    //    c = END_OF_STRING;
+    //  }
+    //  if(
+    //    ((c >= 'a') && (c <= 'z')) ||
+    //      ((c >= 'A') && (c <= 'Z')) ||
+    //      ((c >= '0') && (c <= '9')) ||
+    //      ((c >= '$') && (c <= '.')) ||   // one of: $%&'()*+,-.
+    //      (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
+    //      char.IsLetterOrDigit(c)
+    //  ) {
     //
-    //      // parse hostname -OR- user-info AFTER we're parsed a colon (':')
-    //      hostnameOrUserInfoAfterColon:
-    //      for(;;) {
-    //        ++current;
-    //        if(current < length) {
-    //          c = text[current];
-    //          switch(c) {
-    //            case '%':
-    //            case '+':
-    //            decode = true;
-    //            break;
-    //          }
-    //        } else {
+    //    // valid character, keep parsing
+    //  } else if(c == '@') {
     //
-    //          // use '\uFFFF' as end-of-string marker
-    //          c = END_OF_STRING;
-    //        }
-    //        if(
-    //          ((c >= 'a') && (c <= 'z')) ||
-    //            ((c >= 'A') && (c <= 'Z')) ||
-    //            ((c >= '0') && (c <= '9')) ||
-    //            ((c >= '$') && (c <= '.')) ||   // one of: $%&'()*+,-.
-    //            (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
-    //            char.IsLetterOrDigit(c)
-    //        ) {
+    //    // part before ':' was username
+    //    user = hostnameOrUsername;
+    //    if(decode) {
+    //      user = Decode(user);
+    //    }
     //
-    //          // valid character, keep parsing
-    //        } else if(c == '@') {
+    //    // part after ':' is password
+    //    password = text.Substring(last, current - last);
+    //    if(decode) {
+    //      password = Decode(password);
+    //    }
+    //    last = current + 1;
+    //    decode = false;
+    //    goto hostnameOrIPv6Address;
+    //  } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
     //
-    //          // part before ':' was username
-    //          user = hostnameOrUsername;
-    //          if(decode) {
-    //            user = Decode(user);
-    //          }
+    //    // part before ':' was hostname
+    //    if(decode) {
     //
-    //          // part after ':' is password
-    //          password = text.Substring(last, current - last);
-    //          if(decode) {
-    //            password = Decode(password);
-    //          }
-    //          last = current + 1;
-    //          decode = false;
-    //          goto hostnameOrIPv6Address;
-    //        } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
+    //      // hostname cannot contain encoded characters
+    //      return -1;
+    //    }
+    //    hostname = hostnameOrUsername;
     //
-    //          // part before ':' was hostname
-    //          if(decode) {
+    //    // part after ':' is port, parse and validate it
+    //    if(!int.TryParse(text.Substring(last, current - last), out port) || (port < 0) || (port > ushort.MaxValue)) {
+    //      return -1;
+    //    }
+    //    next = (nextStep)c;
+    //    return current + 1;
+    //  } else {
+    //    return -1;
+    //  }
+    //}
+    //throw new ShouldNeverHappenException("hostnameOrUserInfoAfterColon");
     //
-    //            // hostname cannot contain encoded characters
-    //            return -1;
-    //          }
-    //          hostname = hostnameOrUsername;
+    //hostnameOrIPv6Address:
+    //  ++current;
+    //if(current < length) {
+    //  c = text[current];
+    //  switch(c) {
+    //    case '%':
+    //    case '+':
+    //    decode = true;
+    //    break;
+    //    case '[':
     //
-    //          // part after ':' is port, parse and validate it
-    //          if(!int.TryParse(text.Substring(last, current - last), out port) || (port < 0) || (port > ushort.MaxValue)) {
-    //            return -1;
-    //          }
-    //          next = (nextStep)c;
-    //          return current + 1;
-    //        } else {
-    //          return -1;
-    //        }
-    //      }
-    //      throw new ShouldNeverHappenException("hostnameOrUserInfoAfterColon");
+    //      // NOTE (steveb): we want to include the leading character in the final result
+    //      last = current;
     //
-    //      hostnameOrIPv6Address:
-    //        ++current;
-    //      if(current < length) {
-    //        c = text[current];
-    //        switch(c) {
-    //          case '%':
-    //          case '+':
-    //          decode = true;
-    //          break;
-    //          case '[':
+    //    // IPv6 addresses start with '['
+    //    goto ipv6;
+    //  }
+    //} else {
     //
-    //            // NOTE (steveb): we want to include the leading character in the final result
-    //            last = current;
+    //  // use '\uFFFF' as end-of-string marker
+    //  c = END_OF_STRING;
+    //}
+    //for(;;) {
+    //  if(
+    //    ((c >= 'a') && (c <= 'z')) ||
+    //      ((c >= 'A') && (c <= 'Z')) ||
+    //      ((c >= '0') && (c <= '9')) ||
+    //      ((c >= '$') && (c <= '.')) ||   // one of: $%&'()*+,-.
+    //      (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
+    //      char.IsLetterOrDigit(c)
+    //  ) {
     //
-    //          // IPv6 addresses start with '['
-    //          goto ipv6;
-    //        }
-    //      } else {
+    //    // valid character, keep parsing
+    //  } else if(c == ':') {
+    //    if(decode) {
     //
-    //        // use '\uFFFF' as end-of-string marker
-    //        c = END_OF_STRING;
-    //      }
-    //      for(;;) {
-    //        if(
-    //          ((c >= 'a') && (c <= 'z')) ||
-    //            ((c >= 'A') && (c <= 'Z')) ||
-    //            ((c >= '0') && (c <= '9')) ||
-    //            ((c >= '$') && (c <= '.')) ||   // one of: $%&'()*+,-.
-    //            (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
-    //            char.IsLetterOrDigit(c)
-    //        ) {
+    //      // hostname cannot contain encoded characters
+    //      return -1;
+    //    }
+    //    hostname = text.Substring(last, current - last);
+    //    last = current + 1;
+    //    goto portNumber;
+    //  } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
+    //    if(decode) {
     //
-    //          // valid character, keep parsing
-    //        } else if(c == ':') {
-    //          if(decode) {
+    //      // hostname cannot contain encoded characters
+    //      return -1;
+    //    }
+    //    hostname = text.Substring(last, current - last);
+    //    next = (nextStep)c;
+    //    return current + 1;
+    //  } else {
+    //    return -1;
+    //  }
     //
-    //            // hostname cannot contain encoded characters
-    //            return -1;
-    //          }
-    //          hostname = text.Substring(last, current - last);
-    //          last = current + 1;
-    //          goto portNumber;
-    //        } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
-    //          if(decode) {
+    //  // continue on by reading the next character
+    //  ++current;
+    //  if(current < length) {
+    //    c = text[current];
+    //    switch(c) {
+    //      case '%':
+    //      case '+':
+    //      decode = true;
+    //      break;
+    //    }
+    //  } else {
     //
-    //            // hostname cannot contain encoded characters
-    //            return -1;
-    //          }
-    //          hostname = text.Substring(last, current - last);
-    //          next = (nextStep)c;
-    //          return current + 1;
-    //        } else {
-    //          return -1;
-    //        }
+    //    // use '\uFFFF' as end-of-string marker
+    //    c = END_OF_STRING;
+    //  }
+    //}
+    //throw new ShouldNeverHappenException("hostname");
     //
-    //        // continue on by reading the next character
-    //        ++current;
-    //        if(current < length) {
-    //          c = text[current];
-    //          switch(c) {
-    //            case '%':
-    //            case '+':
-    //            decode = true;
-    //            break;
-    //          }
-    //        } else {
+    //portNumber:
+    //for(;;) {
+    //  ++current;
+    //  c = (current < length) ? text[current] : END_OF_STRING;
+    //  if((c >= '0') && (c <= '9')) {
     //
-    //          // use '\uFFFF' as end-of-string marker
-    //          c = END_OF_STRING;
-    //        }
-    //      }
-    //      throw new ShouldNeverHappenException("hostname");
-    //
-    //      portNumber:
-    //      for(;;) {
-    //        ++current;
-    //        c = (current < length) ? text[current] : END_OF_STRING;
-    //        if((c >= '0') && (c <= '9')) {
-    //
-    //          // valid character, keep parsing
-    //        } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
-    //          if(!int.TryParse(text.Substring(last, current - last), out port) || (port < 0) || (port > ushort.MaxValue)) {
-    //            return -1;
-    //          }
-    //          next = (nextStep)c;
-    //          return current + 1;
-    //        } else {
-    //          return -1;
-    //        }
-    //      }
-    //      throw new ShouldNeverHappenException("portNumber");
-    //
+    //    // valid character, keep parsing
+    //  } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
+    //    if(!int.TryParse(text.Substring(last, current - last), out port) || (port < 0) || (port > ushort.MaxValue)) {
+    //      return -1;
+    //    }
+    //    next = (nextStep)c;
+    //    return current + 1;
+    //  } else {
+    //    return -1;
+    //  }
+    //}
+    //throw new ShouldNeverHappenException("portNumber");
+
+  }
+
+  def TryParseIPv6(text: String, length: Int, current1: Int, parts: Uri): Option[StepResult] = {
     //      ipv6:
     //      for(;;) {
     //        ++current;
