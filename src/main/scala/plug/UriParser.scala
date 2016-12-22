@@ -119,246 +119,239 @@ object UriParser {
   }
 
   def TryParseAuthority(text: String, length: Int, current1: Int, parts: Uri): Option[StepResult] = {
-    //      var last = current1
-    //      var current = current1
-    ////      user = null;
-    ////      password = null;
-    ////      hostname = null;
-    ////      port = -1;
-    //
-    //      // check first character; it could tell us if we're parsing an IPv6 address
-    val (c, decode, ipv6) = if(current1 < length) {
+    // check first character; it could tell us if we're parsing an IPv6 address
+    val (c, decode, ipv6) = if (current1 < length) {
       text(current1) match {
         case c1@('%' | '+') => (c1, true, false)
         case c1@'[' => (c1, false, true)
+        case c1 => (c1, false, false)
       }
     } else {
       (Steps.END_OF_STRING, false, false)
     }
-    if(ipv6) {
+    if (ipv6) {
       TryParseIPv6(text, length, current1, parts)
     } else {
-      None
-    }
-    //// parse hostname -OR- user-info
-    //string hostnameOrUsername;
-    //for(;;) {
-    //  if(
-    //    ((c >= 'a') && (c <= 'z')) ||
-    //      ((c >= 'A') && (c <= 'Z')) ||
-    //      ((c >= '0') && (c <= '9')) ||
-    //      ((c >= '$') && (c <= '.')) ||   // one of: $%&'()*+,-.
-    //      (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
-    //      char.IsLetterOrDigit(c)
-    //  ) {
-    //
-    //    // valid character, keep parsing
-    //  } else if(c == ':') {
-    //
-    //    // part before ':' is either a username or hostname
-    //    hostnameOrUsername = text.Substring(last, current - last);
-    //    last = current + 1;
-    //    goto hostnameOrUserInfoAfterColon;
-    //  } else if(c == '@') {
-    //
-    //    // part before '@' must be username since we didn't find ':'
-    //    user = text.Substring(last, current - last);
-    //    if(decode) {
-    //      user = Decode(user);
-    //      decode = false;
-    //    }
-    //    last = current + 1;
-    //    goto hostnameOrIPv6Address;
-    //  } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
-    //
-    //    // part before '/', '\', '?', '#' must be hostname
-    //    if(decode) {
-    //
-    //      // hostname cannot contain encoded characters
-    //      return -1;
-    //    }
-    //    hostname = text.Substring(last, current - last);
-    //    next = (nextStep)c;
-    //    return current + 1;
-    //  } else {
-    //    return -1;
-    //  }
-    //
-    //  // continue on by reading the next character
-    //  ++current;
-    //  if(current < length) {
-    //    c = text[current];
-    //    switch(c) {
-    //      case '%':
-    //      case '+':
-    //      decode = true;
-    //      break;
-    //    }
-    //  } else {
-    //
-    //    // use '\uFFFF' as end-of-string marker
-    //    c = END_OF_STRING;
-    //  }
-    //}
-    //throw new ShouldNeverHappenException("hostnameOrUsername");
-    //
-    //// parse hostname -OR- user-info AFTER we're parsed a colon (':')
-    //hostnameOrUserInfoAfterColon:
-    //for(;;) {
-    //  ++current;
-    //  if(current < length) {
-    //    c = text[current];
-    //    switch(c) {
-    //      case '%':
-    //      case '+':
-    //      decode = true;
-    //      break;
-    //    }
-    //  } else {
-    //
-    //    // use '\uFFFF' as end-of-string marker
-    //    c = END_OF_STRING;
-    //  }
-    //  if(
-    //    ((c >= 'a') && (c <= 'z')) ||
-    //      ((c >= 'A') && (c <= 'Z')) ||
-    //      ((c >= '0') && (c <= '9')) ||
-    //      ((c >= '$') && (c <= '.')) ||   // one of: $%&'()*+,-.
-    //      (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
-    //      char.IsLetterOrDigit(c)
-    //  ) {
-    //
-    //    // valid character, keep parsing
-    //  } else if(c == '@') {
-    //
-    //    // part before ':' was username
-    //    user = hostnameOrUsername;
-    //    if(decode) {
-    //      user = Decode(user);
-    //    }
-    //
-    //    // part after ':' is password
-    //    password = text.Substring(last, current - last);
-    //    if(decode) {
-    //      password = Decode(password);
-    //    }
-    //    last = current + 1;
-    //    decode = false;
-    //    goto hostnameOrIPv6Address;
-    //  } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
-    //
-    //    // part before ':' was hostname
-    //    if(decode) {
-    //
-    //      // hostname cannot contain encoded characters
-    //      return -1;
-    //    }
-    //    hostname = hostnameOrUsername;
-    //
-    //    // part after ':' is port, parse and validate it
-    //    if(!int.TryParse(text.Substring(last, current - last), out port) || (port < 0) || (port > ushort.MaxValue)) {
-    //      return -1;
-    //    }
-    //    next = (nextStep)c;
-    //    return current + 1;
-    //  } else {
-    //    return -1;
-    //  }
-    //}
-    //throw new ShouldNeverHappenException("hostnameOrUserInfoAfterColon");
-    //
-    //hostnameOrIPv6Address:
-    //  ++current;
-    //if(current < length) {
-    //  c = text[current];
-    //  switch(c) {
-    //    case '%':
-    //    case '+':
-    //    decode = true;
-    //    break;
-    //    case '[':
-    //
-    //      // NOTE (steveb): we want to include the leading character in the final result
-    //      last = current;
-    //
-    //    // IPv6 addresses start with '['
-    //    goto ipv6;
-    //  }
-    //} else {
-    //
-    //  // use '\uFFFF' as end-of-string marker
-    //  c = END_OF_STRING;
-    //}
-    //for(;;) {
-    //  if(
-    //    ((c >= 'a') && (c <= 'z')) ||
-    //      ((c >= 'A') && (c <= 'Z')) ||
-    //      ((c >= '0') && (c <= '9')) ||
-    //      ((c >= '$') && (c <= '.')) ||   // one of: $%&'()*+,-.
-    //      (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
-    //      char.IsLetterOrDigit(c)
-    //  ) {
-    //
-    //    // valid character, keep parsing
-    //  } else if(c == ':') {
-    //    if(decode) {
-    //
-    //      // hostname cannot contain encoded characters
-    //      return -1;
-    //    }
-    //    hostname = text.Substring(last, current - last);
-    //    last = current + 1;
-    //    goto portNumber;
-    //  } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
-    //    if(decode) {
-    //
-    //      // hostname cannot contain encoded characters
-    //      return -1;
-    //    }
-    //    hostname = text.Substring(last, current - last);
-    //    next = (nextStep)c;
-    //    return current + 1;
-    //  } else {
-    //    return -1;
-    //  }
-    //
-    //  // continue on by reading the next character
-    //  ++current;
-    //  if(current < length) {
-    //    c = text[current];
-    //    switch(c) {
-    //      case '%':
-    //      case '+':
-    //      decode = true;
-    //      break;
-    //    }
-    //  } else {
-    //
-    //    // use '\uFFFF' as end-of-string marker
-    //    c = END_OF_STRING;
-    //  }
-    //}
-    //throw new ShouldNeverHappenException("hostname");
-    //
-    //portNumber:
-    //for(;;) {
-    //  ++current;
-    //  c = (current < length) ? text[current] : END_OF_STRING;
-    //  if((c >= '0') && (c <= '9')) {
-    //
-    //    // valid character, keep parsing
-    //  } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
-    //    if(!int.TryParse(text.Substring(last, current - last), out port) || (port < 0) || (port > ushort.MaxValue)) {
-    //      return -1;
-    //    }
-    //    next = (nextStep)c;
-    //    return current + 1;
-    //  } else {
-    //    return -1;
-    //  }
-    //}
-    //throw new ShouldNeverHappenException("portNumber");
+      sealed trait Branch
+      case object HostnameOrUserInfo extends Branch
+      case object HostnameOrUserInfoAfterColon extends Branch
+      case object HostnameOrIPv6Address extends Branch
+      case object PortNumber extends Branch
+      case object IPv6 extends Branch
+      def TryParse2(c: Char, current: Int, last: Int, decode: Boolean, branch: Branch, hostnameOrUsername: String, parts: Uri): Option[StepResult] = branch match {
+        case HostnameOrUserInfo =>
+          //// parse hostname -OR- user-info
+          //for(;;) {
+          if (((c >= 'a') && (c <= 'z')) ||
+            ((c >= 'A') && (c <= 'Z')) ||
+            ((c >= '0') && (c <= '9')) ||
+            ((c >= '$') && (c <= '.')) || // one of: $%&'()*+,-.
+            (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
+            Character.isLetterOrDigit(c)) {
 
+            // valid character, keep parsing
+            //  // continue on by reading the next character
+            //  ++current;
+            val next = current + 1
+            val (c1, decode1) = if (next < length) {
+              text(next) match {
+                case c2@('%' | '+') => (c2, true)
+                case c2 => (c2, decode)
+              }
+            } else {
+              (Steps.END_OF_STRING, decode)
+            }
+            TryParse2(c1, next, last, decode1, branch, null, parts)
+          } else if (c == ':') {
+
+            // part before ':' is either a username or hostname
+            val hostnameOrUsername = text.substring(last, current - last)
+            //last = current + 1;
+            //goto hostnameOrUserInfoAfterColon;
+            TryParse2(c, current, current + 1, decode, HostnameOrUserInfoAfterColon, hostnameOrUsername, parts)
+          } else if (c == '@') {
+
+            // part before '@' must be username since we didn't find ':'
+            val user = text.substring(last, current - last)
+            val user1 = if (decode) Decode(user) else user
+            //last = current + 1;
+            //goto hostnameOrIPv6Address;
+            TryParse2(c, current, current + 1, decode = false, HostnameOrIPv6Address, null, parts.copy(user = Some(user1)))
+          } else if ((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == Steps.END_OF_STRING)) {
+
+            // part before '/', '\', '?', '#' must be hostname
+            if (decode) {
+
+              // hostname cannot contain encoded characters
+              None
+            } else {
+              val hostname = text.substring(last, current)
+              //next = (nextStep) c;
+              //return current + 1;
+              Some(StepResult(current + 1, Steps.determineStep(c), parts.copy(hostname = Some(hostname))))
+            }
+          } else {
+            None
+          }
+
+        case HostnameOrUserInfoAfterColon => None
+        //// parse hostname -OR- user-info AFTER we're parsed a colon (':')
+        //hostnameOrUserInfoAfterColon:
+        //for(;;) {
+        //  ++current;
+        //  if(current < length) {
+        //    c = text[current];
+        //    switch(c) {
+        //      case '%':
+        //      case '+':
+        //      decode = true;
+        //      break;
+        //    }
+        //  } else {
+        //
+        //    // use '\uFFFF' as end-of-string marker
+        //    c = END_OF_STRING;
+        //  }
+        //  if(
+        //    ((c >= 'a') && (c <= 'z')) ||
+        //      ((c >= 'A') && (c <= 'Z')) ||
+        //      ((c >= '0') && (c <= '9')) ||
+        //      ((c >= '$') && (c <= '.')) ||   // one of: $%&'()*+,-.
+        //      (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
+        //      char.IsLetterOrDigit(c)
+        //  ) {
+        //
+        //    // valid character, keep parsing
+        //  } else if(c == '@') {
+        //
+        //    // part before ':' was username
+        //    user = hostnameOrUsername;
+        //    if(decode) {
+        //      user = Decode(user);
+        //    }
+        //
+        //    // part after ':' is password
+        //    password = text.Substring(last, current - last);
+        //    if(decode) {
+        //      password = Decode(password);
+        //    }
+        //    last = current + 1;
+        //    decode = false;
+        //    goto hostnameOrIPv6Address;
+        //  } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
+        //
+        //    // part before ':' was hostname
+        //    if(decode) {
+        //
+        //      // hostname cannot contain encoded characters
+        //      return -1;
+        //    }
+        //    hostname = hostnameOrUsername;
+        //
+        //    // part after ':' is port, parse and validate it
+        //    if(!int.TryParse(text.Substring(last, current - last), out port) || (port < 0) || (port > ushort.MaxValue)) {
+        //      return -1;
+        //    }
+        //    next = (nextStep)c;
+        //    return current + 1;
+        //  } else {
+        //    return -1;
+        //  }
+        //}
+        case HostnameOrIPv6Address => None
+        //hostnameOrIPv6Address:
+        //  ++current;
+        //if(current < length) {
+        //  c = text[current];
+        //  switch(c) {
+        //    case '%':
+        //    case '+':
+        //    decode = true;
+        //    break;
+        //    case '[':
+        //
+        //      // NOTE (steveb): we want to include the leading character in the final result
+        //      last = current;
+        //
+        //    // IPv6 addresses start with '['
+        //    goto ipv6;
+        //  }
+        //} else {
+        //
+        //  // use '\uFFFF' as end-of-string marker
+        //  c = END_OF_STRING;
+        //}
+        //for(;;) {
+        //  if(
+        //    ((c >= 'a') && (c <= 'z')) ||
+        //      ((c >= 'A') && (c <= 'Z')) ||
+        //      ((c >= '0') && (c <= '9')) ||
+        //      ((c >= '$') && (c <= '.')) ||   // one of: $%&'()*+,-.
+        //      (c == '!') || (c == ';') || (c == '=') || (c == '_') || (c == '~') ||
+        //      char.IsLetterOrDigit(c)
+        //  ) {
+        //
+        //    // valid character, keep parsing
+        //  } else if(c == ':') {
+        //    if(decode) {
+        //
+        //      // hostname cannot contain encoded characters
+        //      return -1;
+        //    }
+        //    hostname = text.Substring(last, current - last);
+        //    last = current + 1;
+        //    goto portNumber;
+        //  } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
+        //    if(decode) {
+        //
+        //      // hostname cannot contain encoded characters
+        //      return -1;
+        //    }
+        //    hostname = text.Substring(last, current - last);
+        //    next = (nextStep)c;
+        //    return current + 1;
+        //  } else {
+        //    return -1;
+        //  }
+        //
+        //  // continue on by reading the next character
+        //  ++current;
+        //  if(current < length) {
+        //    c = text[current];
+        //    switch(c) {
+        //      case '%':
+        //      case '+':
+        //      decode = true;
+        //      break;
+        //    }
+        //  } else {
+        //
+        //    // use '\uFFFF' as end-of-string marker
+        //    c = END_OF_STRING;
+        //  }
+        //}
+        case PortNumber => None
+        //portNumber:
+        //for(;;) {
+        //  ++current;
+        //  c = (current < length) ? text[current] : END_OF_STRING;
+        //  if((c >= '0') && (c <= '9')) {
+        //
+        //    // valid character, keep parsing
+        //  } else if((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == END_OF_STRING)) {
+        //    if(!int.TryParse(text.Substring(last, current - last), out port) || (port < 0) || (port > ushort.MaxValue)) {
+        //      return -1;
+        //    }
+        //    next = (nextStep)c;
+        //    return current + 1;
+        //  } else {
+        //    return -1;
+        //  }
+        //}
+        case IPv6 => TryParseIPv6(text, length, current, parts)
+      }
+      TryParse2(c, current1, current1, decode, HostnameOrUserInfo, null, parts)
+    }
   }
 
   def TryParseIPv6(text: String, length: Int, current1: Int, parts: Uri): Option[StepResult] = {
@@ -542,7 +535,7 @@ object UriParser {
 
   def TryParseFragment(text: String, length: Int, start: Int, parts: Uri): StepResult = {
     def ParseFragment(current: Int, decode: Boolean): StepResult = {
-    //var decode = false;
+      //var decode = false;
       if (current < length) {
         val c = text(current)
         val decode2 = c match {
@@ -550,20 +543,20 @@ object UriParser {
           case '+' => true
           case _ => decode
         }
-        if(IsFragmentChar(c)) {
-          ParseFragment(current+1,decode2)
+        if (IsFragmentChar(c)) {
+          ParseFragment(current + 1, decode2)
         } else {
-          StepResult(current,Steps.Error,parts)
+          StepResult(current, Steps.Error, parts)
         }
       } else {
         val fragment = text.substring(start, current)
         val fragment2 = if (decode) {
           Decode(fragment)
         } else fragment
-        StepResult(current, Steps.End,parts.copy(fragment = Some(fragment2)))
+        StepResult(current, Steps.End, parts.copy(fragment = Some(fragment2)))
       }
     }
-    ParseFragment(start+1, false)
+    ParseFragment(start + 1, false)
     StepResult(0, Steps.End, Uri("x"))
   }
 
@@ -621,23 +614,23 @@ object UriParser {
       } else {
         val c = text(textIndex)
         c match {
-            // + => space
+          // + => space
           case '+' => Decode2(textIndex + 1, ' '.toByte :: bytes)
-            // % followed
+          // % followed
           case '%' =>
             // if(((textIndex + 2) < length) && ((next = text[textIndex + 1]) != '%')) {
             if (textIndex + 2 < length) {
               text(textIndex + 1) match {
-                  // fall through to default char handler
-                case '%' => Decode2(textIndex + 1, c.toByte:: bytes)
+                // fall through to default char handler
+                case '%' => Decode2(textIndex + 1, c.toByte :: bytes)
                 // if(next == 'u') {
                 case 'u' =>
                   // if(((textIndex + 5) < length) && (xchar = GetChar(text, textIndex + 2, 4)) != -1) {
                   if (textIndex + 5 < length) {
                     val xchar = GetChar(text, textIndex + 2, 4)
-                    if( xchar == -1) {
+                    if (xchar == -1) {
                       // fall through to default char handler
-                      Decode2(textIndex + 1, c.toByte:: bytes)
+                      Decode2(textIndex + 1, c.toByte :: bytes)
                     } else {
                       //chars[0] = (char)xchar;
                       //bytesIndex += Encoding.UTF8.GetBytes(chars, 0, 1, bytes, bytesIndex);
@@ -648,35 +641,35 @@ object UriParser {
                     }
                   } else {
                     // fall through to default char handler
-                    Decode2(textIndex + 1, c.toByte:: bytes)
+                    Decode2(textIndex + 1, c.toByte :: bytes)
                   }
                 case _ =>
                   //bytes[bytesIndex++] = (byte)xchar;
                   //textIndex += 2;
-                val xchar = GetChar(text, textIndex + 1, 2)
+                  val xchar = GetChar(text, textIndex + 1, 2)
                   val charBytes = xchar.toChar.toString.getBytes(StandardCharsets.UTF_8)
                   Decode2(textIndex + 1 + charBytes.length, charBytes.reverse.toList ::: bytes)
               }
             } else {
-              Decode2(textIndex + 1, c.toByte:: bytes)
+              Decode2(textIndex + 1, c.toByte :: bytes)
             }
           case _ => Decode2(textIndex + 1, c.toByte :: bytes)
         }
       }
     }
-    val bytes = Decode2(0,Nil).reverse.toArray
+    val bytes = Decode2(0, Nil).reverse.toArray
     new String(bytes, StandardCharsets.UTF_8)
   }
 
   def DeterminePort(uriParts: Uri): Uri = uriParts.port match {
     case None =>
-        val port = uriParts.scheme.toLowerCase.hashCode match {
-          case LOCAL_HASHCODE => None
-          case HTTP_HASHCODE => Some(80)
-          case HTTPS_HASHCODE => Some(443)
-          case FTP_HASHCODE => Some(21)
-        }
-        uriParts.copy(port = port, usesDefaultPort = true)
+      val port = uriParts.scheme.toLowerCase.hashCode match {
+        case LOCAL_HASHCODE => None
+        case HTTP_HASHCODE => Some(80)
+        case HTTPS_HASHCODE => Some(443)
+        case FTP_HASHCODE => Some(21)
+      }
+      uriParts.copy(port = port, usesDefaultPort = true)
     case Some(port) if uriParts.usesDefaultPort => uriParts.copy(usesDefaultPort = false)
     case _ => uriParts
   }
