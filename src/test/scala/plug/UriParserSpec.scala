@@ -52,7 +52,8 @@ class UriParserSpec extends FlatSpec with Matchers {
     "https://example.com:443",
     Some(Uri(scheme = "https",
       hostname = Some("example.com"),
-      port = Some(443)
+      port = Some(443),
+      usesDefaultPort = false
     ))
   )
 
@@ -74,18 +75,19 @@ class UriParserSpec extends FlatSpec with Matchers {
   )
 
   it should "parse default port from ftp scheme" in assertParse(
-    "https://example.com:21",
-    Some(Uri(scheme = "https",
+    "ftp://example.com:21",
+    Some(Uri(scheme = "ftp",
       hostname = Some("example.com"),
-      port = Some(21)
+      port = Some(21),
+      usesDefaultPort = false
     ))
   )
 
   it should "parse non-default port from ftp scheme" in assertParse(
-    "https://example.com:22",
-    Some(Uri(scheme = "https",
+    "ftp://example.com:22",
+    Some(Uri(scheme = "ftp",
       hostname = Some("example.com"),
-      port = Some(222),
+      port = Some(22),
       usesDefaultPort = false
     ))
   )
@@ -101,7 +103,8 @@ class UriParserSpec extends FlatSpec with Matchers {
     "unknown://example.com:123",
     Some(Uri(scheme = "unknown",
       hostname = Some("example.com"),
-      port = Some(123)
+      port = Some(123),
+      usesDefaultPort = false
     ))
   )
 
@@ -109,8 +112,7 @@ class UriParserSpec extends FlatSpec with Matchers {
     "hTTp://example.com",
     Some(Uri(scheme = "hTTp",
       hostname = Some("example.com"),
-      port = Some(444),
-      usesDefaultPort = false
+      port = Some(80)
     ))
   )
 
@@ -131,7 +133,7 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true
+      usesDefaultPort = false
     ))
   )
 
@@ -154,8 +156,7 @@ class UriParserSpec extends FlatSpec with Matchers {
     "http://example.com",
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
-      port = Some(80),
-      usesDefaultPort = true
+      port = Some(80)
     ))
   )
 
@@ -163,8 +164,7 @@ class UriParserSpec extends FlatSpec with Matchers {
     "http://8.8.8.8",
     Some(Uri(scheme = "http",
       hostname = Some("8.8.8.8"),
-      port = Some(80),
-      usesDefaultPort = true
+      port = Some(80)
     ))
   )
   it should "parse IPv4 with default port as host name" in assertParse(
@@ -172,7 +172,7 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("8.8.8.8"),
       port = Some(80),
-      usesDefaultPort = true
+      usesDefaultPort = false
     ))
   )
 
@@ -189,7 +189,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("8.8.8.8"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("path")
     ))
   )
@@ -199,7 +198,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("8.8.8.8"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("a" -> Some("b"))
     ))
   )
@@ -208,8 +206,7 @@ class UriParserSpec extends FlatSpec with Matchers {
     "http://[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]",
     Some(Uri(scheme = "http",
       hostname = Some("[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]"),
-      port = Some(80),
-      usesDefaultPort = true
+      port = Some(80)
     ))
   )
   it should "fail to parse partial IPv6 address" in assertParse("http://[2001:0db8:85a3", None)
@@ -220,7 +217,7 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]"),
       port = Some(80),
-      usesDefaultPort = true
+      usesDefaultPort = false
     ))
   )
 
@@ -238,7 +235,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("path")
     ))
   )
@@ -248,7 +244,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("a" -> Some("b"))
     ))
   )
@@ -265,8 +260,7 @@ class UriParserSpec extends FlatSpec with Matchers {
     "http://",
     Some(Uri(scheme = "http",
       hostname = Some(""),
-      port = Some(80),
-      usesDefaultPort = true
+      port = Some(80)
     ))
   )
   it should "parse empty hostname with port" in assertParse(
@@ -274,7 +268,7 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some(""),
       port = Some(8888),
-      usesDefaultPort = true
+      usesDefaultPort = false
     ))
   )
   it should "parse empty hostname with path" in assertParse(
@@ -282,7 +276,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some(""),
       port = Some(8888),
-      usesDefaultPort = true,
       segments = List("path")
     ))
   )
@@ -293,7 +286,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some(""),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("a" -> Some("b"))
     ))
   )
@@ -302,7 +294,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some(""),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("user"),
       password = Some("pass")
     ))
@@ -321,7 +312,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john.doe"),
       password = Some("password")
     ))
@@ -332,7 +322,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john.doe")
     ))
   )
@@ -342,7 +331,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("")
     ))
   )
@@ -352,7 +340,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("8.8.8.8"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john.doe"),
       password = Some("password")
     ))
@@ -363,7 +350,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("8.8.8.8"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john.doe")
     ))
   )
@@ -373,7 +359,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("8.8.8.8"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("")
     ))
   )
@@ -383,7 +368,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john.doe"),
       password = Some("password")
     ))
@@ -394,7 +378,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john.doe")
     ))
   )
@@ -404,7 +387,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("")
     ))
   )
@@ -414,7 +396,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john doe"),
       password = Some("password")
     ))
@@ -425,7 +406,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john:doe"),
       password = Some("password")
     ))
@@ -436,7 +416,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john.doe"),
       password = Some("pass:word")
     ))
@@ -447,7 +426,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john.doe"),
       password = Some("pass+word")
     ))
@@ -458,7 +436,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john doe"),
       password = Some("pass word")
     ))
@@ -469,7 +446,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some("john:doe"),
       password = Some("pass:word")
     ))
@@ -480,7 +456,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       user = Some(":doe")))
   )
 
@@ -491,7 +466,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       trailingSlash = true
     ))
   )
@@ -501,7 +475,7 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
+      usesDefaultPort = false,
       trailingSlash = true
     ))
   )
@@ -511,7 +485,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("8.8.8.8"),
       port = Some(80),
-      usesDefaultPort = true,
       trailingSlash = true
     ))
   )
@@ -521,7 +494,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]"),
       port = Some(80),
-      usesDefaultPort = true,
       trailingSlash = true
     ))
   )
@@ -531,7 +503,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("/")
     ))
   )
@@ -541,7 +512,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("/foo", "/bar")
     ))
   )
@@ -551,7 +521,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("path")
     ))
   )
@@ -561,7 +530,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("path"),
       trailingSlash = true
     ))
@@ -572,7 +540,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("path", "/")
     ))
   )
@@ -582,7 +549,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("abc", "foo%20bar", "xyz")
     ))
   )
@@ -592,7 +558,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("foo^bar")
     ))
   )
@@ -602,7 +567,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("foo|bar")
     ))
   )
@@ -612,7 +576,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("[foobar]")
     ))
   )
@@ -622,7 +585,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("{foobar}")
     ))
   )
@@ -632,7 +594,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("www.ietf.org"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("rfc;15", "rfc2396.txt")
     ))
   )
@@ -642,7 +603,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("www.ietf.org"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("rfc;15", "rfc2396.txt;")
     ))
   )
@@ -652,7 +612,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("www.ietf.org"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List(";15", "rfc2396.txt")
     ))
   )
@@ -662,7 +621,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("cr%c3%a9ate")
     ))
   )
@@ -672,7 +630,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List(),
       trailingSlash = true
     )),
@@ -684,7 +641,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("foo", "bar")
     )),
     Some("http://example.com/foo/bar")
@@ -695,7 +651,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("foo", "/bar")
     )),
     Some("http://example.com/foo//bar")
@@ -706,7 +661,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("foo", "bar"),
       trailingSlash = true
     )),
@@ -718,7 +672,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("/foo", "bar")
     )),
     Some("http://example.com//foo/bar")
@@ -729,7 +682,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("foo", "bar")
     )),
     Some("http://example.com/foo/bar")
@@ -742,7 +694,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List(),
       trailingSlash = true
     ))
@@ -752,8 +703,7 @@ class UriParserSpec extends FlatSpec with Matchers {
     "http://example.com?",
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
-      port = Some(80),
-      usesDefaultPort = true
+      port = Some(80)
     ))
   )
 
@@ -762,7 +712,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("key" -> Some("cr\u00e9ate"))
     ))
   )
@@ -772,7 +721,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("x y" -> None)
     ))
   )
@@ -782,7 +730,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("x%%y" -> None)
     )),
     Some("http://example.com?x%25%25y")
@@ -793,7 +740,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("x%" -> None)
     )),
     Some("http://example.com?x%25")
@@ -804,7 +750,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("x%y" -> null)
     )),
     Some("http://example.com?x%25y")
@@ -815,7 +760,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("x%yz" -> None)
     )),
     Some("http://example.com?x%25yz")
@@ -826,7 +770,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("x y" -> None)
     )),
     Some("http://example.com?x+y")
@@ -837,7 +780,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("x%uxabcy" -> None)
     )),
     Some("http://example.com?x%25uxabcy")
@@ -848,7 +790,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("x y" -> Some("a b"))
     ))
   )
@@ -858,7 +799,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("" -> None, "a" -> Some("b"))
     ))
   )
@@ -868,7 +808,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("a" -> Some("b"))
     )),
     Some("http://example.com?a=b")
@@ -879,7 +818,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       query = List("a" -> None, "" -> None, "b" -> None)
     ))
   )
@@ -891,7 +829,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       fragment = Some("fragment")
     ))
   )
@@ -901,7 +838,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("8.8.8.8"),
       port = Some(80),
-      usesDefaultPort = true,
       fragment = Some("fragment")
     ))
   )
@@ -911,7 +847,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]"),
       port = Some(80),
-      usesDefaultPort = true,
       fragment = Some("fragment")
     ))
   )
@@ -921,7 +856,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       fragment = Some("")
     ))
   )
@@ -931,7 +865,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       fragment = Some("a b")
     ))
   )
@@ -941,7 +874,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       fragment = Some("[a]")
     )),
     Some("http://example.com#%5Ba%5D")
@@ -952,7 +884,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       fragment = Some("\\u001a\\u001A\\u0020")
     )),
     Some("http://example.com#%1A%1A+")
@@ -1010,7 +941,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "ftp",
       hostname = Some("ftp.is.co.za"),
       port = Some(21),
-      usesDefaultPort = true,
       segments = List("rfc", "rfc1808.txt")
     ))
   )
@@ -1032,7 +962,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("host"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("seg^ment"),
       query = List("qu^ery" -> Some("a|b^c")),
       fragment = Some("fo|o#b^ar")
@@ -1044,7 +973,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("foo"),
       query = List("bar[123]" -> Some("abc"))
     )),
@@ -1056,7 +984,6 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("foo"),
       query = List("bar" -> Some("{xyz}"))
     )),
@@ -1068,25 +995,43 @@ class UriParserSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      usesDefaultPort = true,
       segments = List("foo"),
       fragment = Some("{xyz}")
     ))
   )
+
+  "TryParsePort" should "parse 80" in {
+    UriParser.TryParsePort("80", 0, 2) should equal(Some(80))
+  }
+
+  it should "parse 80 out of abc80def" in {
+    UriParser.TryParsePort("abc80def", 3, 5) should equal(Some(80))
+  }
+
+  it should "parse 443 from tail" in {
+    UriParser.TryParsePort("https://example.com:443", 20, 23) should equal(Some(443))
+  }
+  it should "return None on port lower than 0" in {
+    UriParser.TryParsePort("-1", 0, 2) should equal(None)
+  }
+
+  it should "return None on port higher than 65535" in {
+    UriParser.TryParsePort("65536", 0, 5) should equal(None)
+  }
 
   def assertParse(uri: String, parts: Option[Uri], out: Option[String] = None) = {
     withClue(s"Uri: $uri") {
       UriParser.TryParse(uri) match {
         case None => parts match {
           case None =>
-          case Some(_) => fail(s"Expected parse of '$uri' to succeed")
+          case Some(_) => fail(s"Expected parse of to succeed")
         }
         case Some(parsed) =>
           parts match {
             case None => fail(s"Did not expect parse to succeed")
             case Some(parts2) =>
               parsed should equal(parts2)
-              //parsed.toString should equal(out.getOrElse(uri))
+            //parsed.toString should equal(out.getOrElse(uri))
           }
       }
     }
