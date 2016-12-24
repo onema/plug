@@ -137,6 +137,7 @@ object UriParser {
     }
 
     def TryParse2(c: Char, current: Int, last: Int, decode: Boolean, branch: Branch, hostnameOrUsername: String, parts: Uri): Option[StepResult] = {
+
       def nextChar(allowIPv6: Boolean = false): (Char, Int, Boolean, Boolean) = {
         val next = current + 1
         if (next < length) {
@@ -149,7 +150,9 @@ object UriParser {
           (Steps.END_OF_STRING, next, decode, false)
         }
       }
+
       def iffDecode(content: String) = if (decode) Decode(content) else content
+
       branch match {
         case HostnameOrUserInfo =>
           //// parse hostname -OR- user-info
@@ -380,11 +383,10 @@ object UriParser {
       //      next = (nextStep)c;
       //      return current + 1;
     }
-    // ParsePath emulates for(; ;++current), so we need to start with one less than current
     ParsePath(start, start, hasLeadingBackslashes = false, leading = true, parts)
   }
 
-  def TryParseQuery(text: String, length: Int, current: Int, parts: Uri): StepResult = {
+  def TryParseQuery(text: String, length: Int, start: Int, parts: Uri): StepResult = {
     //      next = nextStep.Error;
     //      @params = null;
     //      var last = current;
@@ -393,85 +395,83 @@ object UriParser {
     //      var decode = false;
     //      var parsingKey = true;
     //      char c;
-    //      for(; ; ++current) {
-    //        if(current < length) {
-    //          c = text[current];
-    //          switch(c) {
-    //            case '%':
-    //            case '+':
-    //            decode = true;
-    //            break;
-    //          }
-    //        } else {
-    //
-    //          // use '\uFFFF' as end-of-string marker
-    //          c = END_OF_STRING;
-    //        }
-    //        if(
-    //          ((c >= 'a') && (c <= '~')) || // one of: abcdefghijklmnopqrstuvwxyz{|}~
-    //            ((c >= '?') && (c <= '_')) || // one of: ?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_
-    //            ((c >= '\'') && (c <= ';')) || // one of: '()*+,-./0123456789:;
-    //            (c == '$') || (c == '%') || (c == '!') ||
-    //            char.IsLetterOrDigit(c)
-    //        ) {
-    //
-    //          // valid character, keep parsing
-    //        } else if((c == '&') || (c == '#') || (c == END_OF_STRING)) {
-    //          if(parsingKey) {
-    //            if(current != last) {
-    //
-    //              // add non-empty key with empty value
-    //              paramsKey = text.Substring(last, current - last);
-    //              if(decode) {
-    //                paramsKey = Decode(paramsKey);
-    //                decode = false;
-    //              }
-    //              paramsList.Add(new KeyValuePair<string, string>(paramsKey, null));
-    //            } else if(c == '&') {
-    //
-    //              // this occurs in the degenerate case of two consecutive ampersands (e.g. "&&")
-    //              paramsList.Add(new KeyValuePair<string, string>("", null));
-    //            }
-    //          } else {
-    //
-    //            // add key with value
-    //            var paramsValue = text.Substring(last, current - last);
-    //            if(decode) {
-    //              paramsValue = Decode(paramsValue);
-    //              decode = false;
-    //            }
-    //            paramsList.Add(new KeyValuePair<string, string>(paramsKey, paramsValue));
-    //            parsingKey = true;
-    //          }
-    //
-    //          // check if we found a query parameter separator
-    //          if(c == '&') {
-    //            last = current + 1;
-    //            continue;
-    //          }
-    //
-    //          // we're done parsing the query string
-    //          break;
-    //        } else if(c == '=') {
-    //          if(parsingKey) {
-    //            paramsKey = text.Substring(last, current - last);
-    //            if(decode) {
-    //              paramsKey = Decode(paramsKey);
-    //              decode = false;
-    //            }
-    //            last = current + 1;
-    //            parsingKey = false;
-    //          }
-    //        } else {
-    //          return -1;
-    //        }
-    //      }
-    //
-    //      // initialize return values
-    //      next = (nextStep)c;
-    //      @params = paramsList.ToArray();
-    //      return current + 1;
-    StepResult(0, Steps.End, Uri("x"))
+
+    def ParseQuery(current: Int, last: Int, paramsKey: String, decode0: Boolean, parsingKey: Boolean, parts: Uri): StepResult = {
+      def next = current + 1
+
+      val (c, decode) = if (current < length) {
+        text(current) match {
+          case c1@('%' | '+') => (c1, true)
+          case c1 => (c1, decode0)
+        }
+      } else {
+
+        // use '\uFFFF' as end-of-string marker
+        (Steps.END_OF_STRING, decode0)
+      }
+
+      def iffDecode(content: String) = if (decode) Decode(content) else content
+
+      if (
+        ((c >= 'a') && (c <= '~')) || // one of: abcdefghijklmnopqrstuvwxyz{|}~
+          ((c >= '?') && (c <= '_')) || // one of: ?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_
+          ((c >= '\'') && (c <= ';')) || // one of: '()*+,-./0123456789:;
+          (c == '$') || (c == '%') || (c == '!') ||
+          Character.isLetterOrDigit(c)
+      ) {
+
+        // valid character, keep parsing
+        ParseQuery(next, last, paramsKey, decode, parsingKey, parts)
+      } else if ((c == '&') || (c == '#') || (c == Steps.END_OF_STRING)) {
+        val (parts1, parsingKey1) = if (parsingKey) {
+          val parts1 = if (current != last) {
+
+            // add non-empty key with empty value
+            val (paramsKey) = iffDecode(text.substring(last, current))
+            parts.copy(query = (paramsKey -> None) :: parts.query)
+          } else if (c == '&') {
+
+            // this occurs in the degenerate case of two consecutive ampersands (e.g. "&&")
+            parts.copy(query = (paramsKey -> None) :: parts.query)
+          } else {
+            parts
+          }
+          (parts1, parsingKey)
+        } else {
+
+          // add key with value
+          val paramsValue = iffDecode(text.substring(last, current))
+          (parts.copy(query = (paramsKey -> Some(paramsValue)) :: parts.query), true)
+        }
+
+        // check if we found a query parameter separator
+        if (c == '&') {
+          //last = current + 1;
+          //continue;
+          ParseQuery(next, current + 1, paramsKey, decode0 = false, parsingKey = parsingKey1, parts1)
+        } else {
+
+          // we're done parsing the query string
+          //      // initialize return values
+          //      next = (nextStep)c;
+          //      @params = paramsList.ToArray();
+          //      return current + 1;
+          StepResult(next, Steps.determineStep(c), parts1.copy(query = parts1.query.reverse))
+        }
+      } else if (c == '=') {
+        if (parsingKey) {
+          val paramsKey1 = iffDecode(text.substring(last, current))
+          //last = current + 1;
+          //parsingKey = false;
+          ParseQuery(next, current + 1, paramsKey1, decode0 = false, parsingKey = false, parts)
+        } else {
+          ParseQuery(next, last, paramsKey, decode, parsingKey, parts)
+        }
+      } else {
+        StepResult(current, Steps.Error, parts)
+      }
+    }
+    ParseQuery(start, start, null, decode0 = false, parsingKey = true, parts)
   }
 
   def TryParseFragment(text: String, length: Int, start: Int, parts: Uri): StepResult = {
@@ -497,8 +497,7 @@ object UriParser {
         StepResult(current, Steps.End, parts.copy(fragment = Some(fragment2)))
       }
     }
-    ParseFragment(start + 1, false)
-    StepResult(0, Steps.End, Uri("x"))
+    ParseFragment(start, decode = false)
   }
 
   def IsFragmentChar(c: Char): Boolean = {

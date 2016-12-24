@@ -255,7 +255,8 @@ class UriParserTryParseSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some(""),
       port = Some(80),
-      query = List("a" -> Some("b"))
+      query = List("a" -> Some("b")),
+      trailingSlash = True
     ))
   )
   it should "parse empty hostname with user & pass" in assertParse(
@@ -853,7 +854,7 @@ class UriParserTryParseSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      fragment = Some("\\u001a\\u001A\\u0020")
+      fragment = Some("\u001a\u001A\u0020")
     )),
     Some("http://example.com#%1A%1A+")
   )
