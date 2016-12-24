@@ -256,7 +256,7 @@ class UriParserTryParseSpec extends FlatSpec with Matchers {
       hostname = Some(""),
       port = Some(80),
       query = List("a" -> Some("b")),
-      trailingSlash = True
+      trailingSlash = true
     ))
   )
   it should "parse empty hostname with user & pass" in assertParse(
@@ -678,11 +678,11 @@ class UriParserTryParseSpec extends FlatSpec with Matchers {
   )
 
   it should "parse and decode utf-8 query value" in assertParse(
-    "http://example.com/?key=cr%C3%A9ate",
+    "http://example.com?key=cr%C3%A9ate",
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      query = List("key" -> Some("cr\u00e9ate"))
+      query = List("key" -> Some("créate"))
     ))
   )
 
@@ -720,7 +720,7 @@ class UriParserTryParseSpec extends FlatSpec with Matchers {
     Some(Uri(scheme = "http",
       hostname = Some("example.com"),
       port = Some(80),
-      query = List("x%y" -> null)
+      query = List("x%y" -> None)
     )),
     Some("http://example.com?x%25y")
   )
@@ -969,25 +969,6 @@ class UriParserTryParseSpec extends FlatSpec with Matchers {
       fragment = Some("{xyz}")
     ))
   )
-
-  "TryParsePort" should "parse 80" in {
-    UriParser.TryParsePort("80", 0, 2) should equal(Some(80))
-  }
-
-  it should "parse 80 out of abc80def" in {
-    UriParser.TryParsePort("abc80def", 3, 5) should equal(Some(80))
-  }
-
-  it should "parse 443 from tail" in {
-    UriParser.TryParsePort("https://example.com:443", 20, 23) should equal(Some(443))
-  }
-  it should "return None on port lower than 0" in {
-    UriParser.TryParsePort("-1", 0, 2) should equal(None)
-  }
-
-  it should "return None on port higher than 65535" in {
-    UriParser.TryParsePort("65536", 0, 5) should equal(None)
-  }
 
   def assertParse(uri: String, parts: Option[Uri], out: Option[String] = None) = {
     withClue(s"Uri: $uri") {

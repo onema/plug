@@ -336,17 +336,9 @@ object UriParser {
       val c = if (current < length) text(current) else Steps.END_OF_STRING
       if ((c == '/') || (c == '\\')) {
         if (leading) {
-          //hasLeadingBackslashes = hasLeadingBackslashes || (c == '\\')
           ParsePath(next, last, hasLeadingBackslashes || (c == '\\'), leading, parts)
         } else {
           val (segment, hasLeadingBackslashes1) = getSegment
-          //                  text.substring(last, current )
-          //                  val (segment1,hasLeadingBackslashes1) = if(hasLeadingBackslashes) {
-          //                    (segment.replace('\\', '/'),false)
-          //                  } else (segment,hasLeadingBackslashes)
-          //segmentList.Add(segment);
-          //last = current + 1;
-          //leading = true;
           ParsePath(next, current + 1, hasLeadingBackslashes1, leading = true, parts.copy(segments = segment :: parts.segments))
         }
       } else if (
@@ -357,7 +349,6 @@ object UriParser {
           Character.isLetterOrDigit(c)) {
 
         // no longer accept leading '/' or '\' characters
-        //leading = false;
         ParsePath(next, last, hasLeadingBackslashes, leading = false, parts)
       } else if ((c == '?') || (c == '#') || (c == Steps.END_OF_STRING)) {
         val (segments, trailingSlash) = if (last == current) {
@@ -365,37 +356,17 @@ object UriParser {
           (parts.segments, true)
         } else {
           val (segment, _) = getSegment
-          //                  text.substring(last, current)
-          //                  if(hasLeadingBackslashes) {
-          //                    segment = segment.Replace('\\', '/');
-          //                  }
-          //segmentList.Add(segment);
           (segment :: parts.segments, false)
         }
         StepResult(current + 1, Steps.determineStep(c), parts.copy(trailingSlash = trailingSlash, segments = segments.reverse))
       } else {
-        //return -1;
         StepResult(current, Steps.Error, parts)
       }
-      //
-      //      // initialize return values
-      //      segments = segmentList.ToArray();
-      //      next = (nextStep)c;
-      //      return current + 1;
     }
     ParsePath(start, start, hasLeadingBackslashes = false, leading = true, parts)
   }
 
   def TryParseQuery(text: String, length: Int, start: Int, parts: Uri): StepResult = {
-    //      next = nextStep.Error;
-    //      @params = null;
-    //      var last = current;
-    //      var paramsList = new List<KeyValuePair<string, string>>(16);
-    //      string paramsKey = null;
-    //      var decode = false;
-    //      var parsingKey = true;
-    //      char c;
-
     def ParseQuery(current: Int, last: Int, paramsKey: String, decode0: Boolean, parsingKey: Boolean, parts: Uri): StepResult = {
       def next = current + 1
 
@@ -432,7 +403,7 @@ object UriParser {
           } else if (c == '&') {
 
             // this occurs in the degenerate case of two consecutive ampersands (e.g. "&&")
-            parts.copy(query = (paramsKey -> None) :: parts.query)
+            parts.copy(query = ("" -> None) :: parts.query)
           } else {
             parts
           }
@@ -446,23 +417,15 @@ object UriParser {
 
         // check if we found a query parameter separator
         if (c == '&') {
-          //last = current + 1;
-          //continue;
           ParseQuery(next, current + 1, paramsKey, decode0 = false, parsingKey = parsingKey1, parts1)
         } else {
 
           // we're done parsing the query string
-          //      // initialize return values
-          //      next = (nextStep)c;
-          //      @params = paramsList.ToArray();
-          //      return current + 1;
           StepResult(next, Steps.determineStep(c), parts1.copy(query = parts1.query.reverse))
         }
       } else if (c == '=') {
         if (parsingKey) {
           val paramsKey1 = iffDecode(text.substring(last, current))
-          //last = current + 1;
-          //parsingKey = false;
           ParseQuery(next, current + 1, paramsKey1, decode0 = false, parsingKey = false, parts)
         } else {
           ParseQuery(next, last, paramsKey, decode, parsingKey, parts)
@@ -561,38 +524,28 @@ object UriParser {
             // if(((textIndex + 2) < length) && ((next = text[textIndex + 1]) != '%')) {
             if (textIndex + 2 < length) {
               text(textIndex + 1) match {
-                // fall through to default char handler
                 case '%' => Decode2(textIndex + 1, c.toByte :: bytes)
-                // if(next == 'u') {
                 case 'u' =>
-                  // if(((textIndex + 5) < length) && (xchar = GetChar(text, textIndex + 2, 4)) != -1) {
                   if (textIndex + 5 < length) {
                     GetChar(text, textIndex + 2, 4) match {
                       case -1 =>
                         // fall through to default char handler
                         Decode2(textIndex + 1, c.toByte :: bytes)
                       case xchar =>
-                        //chars[0] = (char)xchar;
-                        //bytesIndex += Encoding.UTF8.GetBytes(chars, 0, 1, bytes, bytesIndex);
-                        //textIndex += 5;
-                        //continue;
                         val charBytes = xchar.toChar.toString.getBytes(StandardCharsets.UTF_8)
-                        Decode2(textIndex + 5 + charBytes.length, charBytes.reverse.toList ::: bytes)
+                        Decode2(textIndex + 6, charBytes.reverse.toList ::: bytes)
                     }
                   } else {
                     // fall through to default char handler
                     Decode2(textIndex + 2, c.toByte :: bytes)
                   }
                 case _ =>
-                  //bytes[bytesIndex++] = (byte)xchar;
-                  //textIndex += 2;
                   GetChar(text, textIndex + 1, 2) match {
                     case -1 =>
-                      // fall through to default char handler
                       Decode2(textIndex + 1, c.toByte :: bytes)
                     case xchar =>
-                      val charBytes = xchar.toChar.toString.getBytes(StandardCharsets.UTF_8)
-                      Decode2(textIndex + 2 + charBytes.length, charBytes.reverse.toList ::: bytes)
+                      val charByte = xchar.asInstanceOf[Byte]
+                      Decode2(textIndex + 3, charByte :: bytes)
                   }
               }
             } else {
