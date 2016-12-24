@@ -153,7 +153,6 @@ object UriParser {
       branch match {
         case HostnameOrUserInfo =>
           //// parse hostname -OR- user-info
-          //for(;;) {
           if (((c >= 'a') && (c <= 'z')) ||
             ((c >= 'A') && (c <= 'Z')) ||
             ((c >= '0') && (c <= '9')) ||
@@ -162,23 +161,17 @@ object UriParser {
             Character.isLetterOrDigit(c)) {
 
             // valid character, keep parsing
-            //  // continue on by reading the next character
-            //  ++current;
-            val (c1, next, decode1, _) = nextChar()
-            TryParse2(c1, next, last, decode1, branch, null, parts)
+            val (c1, current1, decode1, _) = nextChar()
+            TryParse2(c1, current1, last, decode1, branch, null, parts)
           } else if (c == ':') {
 
             // part before ':' is either a username or hostname
             val hostnameOrUsername = text.substring(last, current)
-            //last = current + 1;
-            //goto hostnameOrUserInfoAfterColon;
             TryParse2(c, current, current + 1, decode, HostnameOrUserInfoAfterColon, hostnameOrUsername, parts)
           } else if (c == '@') {
 
             // part before '@' must be username since we didn't find ':'
             val user = iffDecode(text.substring(last, current))
-            //last = current + 1;
-            //goto hostnameOrIPv6Address;
             TryParse2(c, current, current + 1, decode = false, HostnameOrIPv6Address, null, parts.copy(user = Some(user)))
           } else if ((c == '/') || (c == '\\') || (c == '?') || (c == '#') || (c == Steps.END_OF_STRING)) {
 
@@ -189,8 +182,6 @@ object UriParser {
               None
             } else {
               val hostname = text.substring(last, current)
-              //next = (nextStep) c;
-              //return current + 1;
               Some(StepResult(current + 1, Steps.determineStep(c), parts.copy(hostname = Some(hostname))))
             }
           } else {
@@ -199,8 +190,7 @@ object UriParser {
 
         case HostnameOrUserInfoAfterColon =>
           //// parse hostname -OR- user-info AFTER we're parsed a colon (':')
-          //hostnameOrUserInfoAfterColon:
-          val (c1, next, decode1, _) = nextChar()
+          val (c1, current1, decode1, _) = nextChar()
 
           if (((c1 >= 'a') && (c1 <= 'z')) ||
             ((c1 >= 'A') && (c1 <= 'Z')) ||
@@ -208,22 +198,18 @@ object UriParser {
             ((c1 >= '$') && (c1 <= '.')) || // one of: $%&'()*+,-.
             (c1 == '!') || (c1 == ';') || (c1 == '=') ||
             (c1 == '_') || (c1 == '~') ||
-            Character.isLetterOrDigit(c1)
-          ) {
+            Character.isLetterOrDigit(c1)) {
 
             // valid character, keep parsing
-            TryParse2(c1, next, last, decode1, branch, hostnameOrUsername, parts)
+            TryParse2(c1, current1, last, decode1, branch, hostnameOrUsername, parts)
           } else if (c1 == '@') {
 
             // part before ':' was username
             val user = iffDecode(hostnameOrUsername)
 
             // part after ':' is password
-            val password = iffDecode(text.substring(last, next))
-            //last = current + 1;
-            //decode = false;
-            //goto hostnameOrIPv6Address;
-            TryParse2(c1, next, next + 1, decode = false, HostnameOrIPv6Address, null, parts.copy(user = Some(user), password = Some(password)))
+            val password = iffDecode(text.substring(last, current1))
+            TryParse2(c1, current1, current1 + 1, decode = false, HostnameOrIPv6Address, null, parts.copy(user = Some(user), password = Some(password)))
           } else if ((c1 == '/') || (c1 == '\\') || (c1 == '?') || (c1 == '#') || (c1 == Steps.END_OF_STRING)) {
 
             // part before ':' was hostname
@@ -235,25 +221,19 @@ object UriParser {
               val hostname = hostnameOrUsername
 
               // part after ':' is port, parse and validate it
-              //if(!int.TryParse(text.Substring(last, current - last), out port) || (port < 0) || (port > ushort.MaxValue)) {
-              //  return -1;
-              //}
-              //next = (nextStep)c;
-              //return current + 1;
-              TryParsePort(text, last, next) match {
+              TryParsePort(text, last, current1) match {
                 case None => None
-                case Some(port) => Some(StepResult(next + 1, Steps.determineStep(c1), parts.copy(hostname = Some(hostname), port = Some(port))))
+                case Some(port) => Some(StepResult(current1 + 1, Steps.determineStep(c1), parts.copy(hostname = Some(hostname), port = Some(port))))
               }
             }
           } else {
             None
           }
         case HostnameOrIPv6Address =>
-          //hostnameOrIPv6Address:
-          val (c1, next, decode1, ipv6) = nextChar()
+          val (c1, current1, decode1, ipv6) = nextChar(allowIPv6 = true)
           if (ipv6) {
             // NOTE: we want to include the leading character in the final result, so last becomes current
-            TryParse2(c1, next, next, decode1, IPv6, null, parts)
+            TryParse2(c1, current1, current1, decode1, IPv6, null, parts)
           } else {
             if (((c1 >= 'a') && (c1 <= 'z')) ||
               ((c1 >= 'A') && (c1 <= 'Z')) ||
@@ -261,22 +241,19 @@ object UriParser {
               ((c1 >= '$') && (c1 <= '.')) || // one of: $%&'()*+,-.
               (c1 == '!') || (c1 == ';') || (c1 == '=') ||
               (c1 == '_') || (c1 == '~') ||
-              Character.isLetterOrDigit(c1)
-            ) {
+              Character.isLetterOrDigit(c1)) {
 
               // valid character, keep parsing
-              val (c2, next2, decode2, _) = nextChar()
-              TryParse2(c2, next2, last, decode2, branch, null, parts)
+              val (c2, current2, decode2, _) = nextChar()
+              TryParse2(c2, current2, last, decode2, branch, null, parts)
             } else if (c1 == ':') {
               if (decode) {
 
                 // hostname cannot contain encoded characters
                 None
               } else {
-                val hostname = text.substring(last, next)
-                //last = current + 1;
-                //goto portNumber;
-                TryParse2(c1, next, next + 1, decode1, PortNumber, null, parts.copy(hostname = Some(hostname)))
+                val hostname = text.substring(last, current1)
+                TryParse2(c1, current1, current1 + 1, decode1, PortNumber, null, parts.copy(hostname = Some(hostname)))
               }
             } else if ((c1 == '/') || (c1 == '\\') || (c1 == '?') || (c1 == '#') || (c1 == Steps.END_OF_STRING)) {
               if (decode) {
@@ -284,39 +261,31 @@ object UriParser {
                 // hostname cannot contain encoded characters
                 None
               } else {
-                val hostname = text.substring(last, next)
-                //next = (nextStep) c;
-                //return current + 1;
-                Some(StepResult(next + 1, Steps.determineStep(c1), parts.copy(hostname = Some(hostname))))
+                val hostname = text.substring(last, current1)
+                Some(StepResult(current1 + 1, Steps.determineStep(c1), parts.copy(hostname = Some(hostname))))
               }
             } else {
               None
             }
           }
         case PortNumber =>
-          //portNumber:
-          //  ++current;
-          //  c = (current < length) ? text[current] : END_OF_STRING;
-          val next = current + 1
-          val c1 = if (next < length) text(next) else Steps.END_OF_STRING
+          val current1 = current + 1
+          val c1 = if (current1 < length) text(current1) else Steps.END_OF_STRING
           if ((c1 >= '0') && (c1 <= '9')) {
 
             // valid character, keep parsing
-            TryParse2(c1, next, last, decode, branch, null, parts)
+            TryParse2(c1, current1, last, decode, branch, null, parts)
           } else if ((c1 == '/') || (c1 == '\\') || (c1 == '?') || (c1 == '#') || (c1 == Steps.END_OF_STRING)) {
-            TryParsePort(text, last, next) match {
+            TryParsePort(text, last, current1) match {
               case None => None
-              case Some(port) => Some(StepResult(next + 1, Steps.determineStep(c1), parts.copy(port = Some(port))))
+              case Some(port) => Some(StepResult(current1 + 1, Steps.determineStep(c1), parts.copy(port = Some(port))))
             }
           } else {
             None
           }
         case IPv6 =>
-          //      ipv6:
-          //        ++current;
-          //        c = (current < length) ? text[current] : END_OF_STRING;
-          val next = current + 1
-          val c1 = if (next < length) text(next) else Steps.END_OF_STRING
+          val current1 = current + 1
+          val c1 = if (current1 < length) text(current1) else Steps.END_OF_STRING
 
           if (((c1 >= 'a') && (c1 <= 'f')) ||
             ((c1 >= 'A') && (c1 <= 'F')) ||
@@ -324,21 +293,17 @@ object UriParser {
             (c1 == ':') || (c1 == '.')) {
 
             // valid character, keep parsing
-            TryParse2(c1, next, last, decode, branch, null, parts)
+            TryParse2(c1, current1, last, decode, branch, null, parts)
           } else if (c1 == ']') {
-            val hostname = text.substring(last, next + 1)
+            val hostname = text.substring(last, current1 + 1)
 
             // check next character to determine correct state to transition to
-            val next2 = next + 1
-            val c2 = if (next2 < length) text(next2) else Steps.END_OF_STRING
+            val current2 = current1 + 1
+            val c2 = if (current2 < length) text(current2) else Steps.END_OF_STRING
             if (c2 == ':') {
-              //last = current + 1;
-              //goto portNumber;
-              TryParse2(c2, next2, next2 + 1, decode, PortNumber, null, parts.copy(hostname = Some(hostname)))
+              TryParse2(c2, current2, current2 + 1, decode, PortNumber, null, parts.copy(hostname = Some(hostname)))
             } else if ((c2 == '/') || (c2 == '\\') || (c2 == '?') || (c2 == '#') || (c2 == Steps.END_OF_STRING)) {
-              //next = (nextStep)c;
-              //return current + 1;
-              Some(StepResult(next2 + 1, Steps.determineStep(c2), parts.copy(hostname = Some(hostname))))
+              Some(StepResult(current2 + 1, Steps.determineStep(c2), parts.copy(hostname = Some(hostname))))
             } else {
               None
             }
@@ -347,66 +312,76 @@ object UriParser {
           }
       }
     }
-    val branch = if(ipv6) IPv6 else HostnameOrUserInfo
+    val branch = if (ipv6) IPv6 else HostnameOrUserInfo
     TryParse2(c, current1, current1, decode, branch, null, parts)
   }
 
-  def TryParsePath(text: String, length: Int, current: Int, parts: Uri): StepResult = {
-    //      next = nextStep.Error;
-    //      segments = null;
-    //      var last = current;
-    //      var hasLeadingBackslashes = false;
-    //      var segmentList = new List<string>(16);
-    //      var leading = true;
-    //      char c;
-    //      for(; ; ++current) {
-    //        c = (current < length) ? text[current] : END_OF_STRING;
-    //        if((c == '/') || (c == '\\')) {
-    //          if(leading) {
-    //            hasLeadingBackslashes = hasLeadingBackslashes || (c == '\\');
-    //          } else {
-    //            var segment = text.Substring(last, current - last);
-    //            if(hasLeadingBackslashes) {
-    //              segment = segment.Replace('\\', '/');
-    //              hasLeadingBackslashes = false;
-    //            }
-    //            segmentList.Add(segment);
-    //            last = current + 1;
-    //            leading = true;
-    //          }
-    //        } else if(
-    //          ((c >= 'a') && (c <= '~')) ||   // one of: abcdefghijklmnopqrstuvwxyz{|}~
-    //            ((c >= '@') && (c <= '_')) ||   // one of: @ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_
-    //            ((c >= '$') && (c <= ';')) ||   // one of: $%&'()*+,-./0123456789:;
-    //            (c == '=') || (c == '!') ||
-    //            char.IsLetterOrDigit(c)
-    //        ) {
-    //
-    //          // no longer accept leading '/' or '\' characters
-    //          leading = false;
-    //        } else if((c == '?') || (c == '#') || (c == END_OF_STRING)) {
-    //          if(last == current) {
-    //            trailingSlash = true;
-    //          } else {
-    //            var segment = text.Substring(last, current - last);
-    //            if(hasLeadingBackslashes) {
-    //              segment = segment.Replace('\\', '/');
-    //            }
-    //            segmentList.Add(segment);
-    //          }
-    //
-    //          // we're done parsing the path string
-    //          break;
-    //        } else {
-    //          return -1;
-    //        }
-    //      }
-    //
-    //      // initialize return values
-    //      segments = segmentList.ToArray();
-    //      next = (nextStep)c;
-    //      return current + 1;
-    StepResult(0, Steps.End, Uri("x"))
+  def TryParsePath(text: String, length: Int, start: Int, parts: Uri): StepResult = {
+    def ParsePath(current: Int, last: Int,
+                  hasLeadingBackslashes: Boolean, leading: Boolean = true,
+                  parts: Uri): StepResult = {
+
+      def next = current + 1
+
+      def getSegment: (String, Boolean) = {
+        val segment = text.substring(last, current)
+        if (hasLeadingBackslashes) {
+          (segment.replace('\\', '/'), false)
+        } else (segment, hasLeadingBackslashes)
+      }
+
+      val c = if (current < length) text(current) else Steps.END_OF_STRING
+      if ((c == '/') || (c == '\\')) {
+        if (leading) {
+          //hasLeadingBackslashes = hasLeadingBackslashes || (c == '\\')
+          ParsePath(next, last, hasLeadingBackslashes || (c == '\\'), leading, parts)
+        } else {
+          val (segment, hasLeadingBackslashes1) = getSegment
+          //                  text.substring(last, current )
+          //                  val (segment1,hasLeadingBackslashes1) = if(hasLeadingBackslashes) {
+          //                    (segment.replace('\\', '/'),false)
+          //                  } else (segment,hasLeadingBackslashes)
+          //segmentList.Add(segment);
+          //last = current + 1;
+          //leading = true;
+          ParsePath(next, current + 1, hasLeadingBackslashes1, leading = true, parts.copy(segments = segment :: parts.segments))
+        }
+      } else if (
+        ((c >= 'a') && (c <= '~')) || // one of: abcdefghijklmnopqrstuvwxyz{|}~
+          ((c >= '@') && (c <= '_')) || // one of: @ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_
+          ((c >= '$') && (c <= ';')) || // one of: $%&'()*+,-./0123456789:;
+          (c == '=') || (c == '!') ||
+          Character.isLetterOrDigit(c)) {
+
+        // no longer accept leading '/' or '\' characters
+        //leading = false;
+        ParsePath(next, last, hasLeadingBackslashes, leading = false, parts)
+      } else if ((c == '?') || (c == '#') || (c == Steps.END_OF_STRING)) {
+        val (segments, trailingSlash) = if (last == current) {
+          //trailingSlash = true;
+          (parts.segments, true)
+        } else {
+          val (segment, _) = getSegment
+          //                  text.substring(last, current)
+          //                  if(hasLeadingBackslashes) {
+          //                    segment = segment.Replace('\\', '/');
+          //                  }
+          //segmentList.Add(segment);
+          (segment :: parts.segments, false)
+        }
+        StepResult(current + 1, Steps.determineStep(c), parts.copy(trailingSlash = trailingSlash, segments = segments.reverse))
+      } else {
+        //return -1;
+        StepResult(current, Steps.Error, parts)
+      }
+      //
+      //      // initialize return values
+      //      segments = segmentList.ToArray();
+      //      next = (nextStep)c;
+      //      return current + 1;
+    }
+    // ParsePath emulates for(; ;++current), so we need to start with one less than current
+    ParsePath(start, start, hasLeadingBackslashes = false, leading = true, parts)
   }
 
   def TryParseQuery(text: String, length: Int, current: Int, parts: Uri): StepResult = {
@@ -593,28 +568,33 @@ object UriParser {
                 case 'u' =>
                   // if(((textIndex + 5) < length) && (xchar = GetChar(text, textIndex + 2, 4)) != -1) {
                   if (textIndex + 5 < length) {
-                    val xchar = GetChar(text, textIndex + 2, 4)
-                    if (xchar == -1) {
-                      // fall through to default char handler
-                      Decode2(textIndex + 1, c.toByte :: bytes)
-                    } else {
-                      //chars[0] = (char)xchar;
-                      //bytesIndex += Encoding.UTF8.GetBytes(chars, 0, 1, bytes, bytesIndex);
-                      //textIndex += 5;
-                      //continue;
-                      val charBytes = xchar.toChar.toString.getBytes(StandardCharsets.UTF_8)
-                      Decode2(textIndex + 2 + charBytes.length, charBytes.reverse.toList ::: bytes)
+                    GetChar(text, textIndex + 2, 4) match {
+                      case -1 =>
+                        // fall through to default char handler
+                        Decode2(textIndex + 1, c.toByte :: bytes)
+                      case xchar =>
+                        //chars[0] = (char)xchar;
+                        //bytesIndex += Encoding.UTF8.GetBytes(chars, 0, 1, bytes, bytesIndex);
+                        //textIndex += 5;
+                        //continue;
+                        val charBytes = xchar.toChar.toString.getBytes(StandardCharsets.UTF_8)
+                        Decode2(textIndex + 5 + charBytes.length, charBytes.reverse.toList ::: bytes)
                     }
                   } else {
                     // fall through to default char handler
-                    Decode2(textIndex + 1, c.toByte :: bytes)
+                    Decode2(textIndex + 2, c.toByte :: bytes)
                   }
                 case _ =>
                   //bytes[bytesIndex++] = (byte)xchar;
                   //textIndex += 2;
-                  val xchar = GetChar(text, textIndex + 1, 2)
-                  val charBytes = xchar.toChar.toString.getBytes(StandardCharsets.UTF_8)
-                  Decode2(textIndex + 1 + charBytes.length, charBytes.reverse.toList ::: bytes)
+                  GetChar(text, textIndex + 1, 2) match {
+                    case -1 =>
+                      // fall through to default char handler
+                      Decode2(textIndex + 1, c.toByte :: bytes)
+                    case xchar =>
+                      val charBytes = xchar.toChar.toString.getBytes(StandardCharsets.UTF_8)
+                      Decode2(textIndex + 2 + charBytes.length, charBytes.reverse.toList ::: bytes)
+                  }
               }
             } else {
               Decode2(textIndex + 1, c.toByte :: bytes)
