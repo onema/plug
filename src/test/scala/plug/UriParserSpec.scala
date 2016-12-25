@@ -16,22 +16,23 @@ class UriParserSpec extends FlatSpec with Matchers {
   }
 
   "TryParsePort" should "parse 80" in {
-    UriParser.TryParsePort("80", 0, 2) should equal(Some(80))
+    UriParser.TryParsePort("80", 0, 2) should equal(80)
   }
 
   it should "parse 80 out of abc80def" in {
-    UriParser.TryParsePort("abc80def", 3, 5) should equal(Some(80))
+    UriParser.TryParsePort("abc80def", 3, 5) should equal(80)
   }
 
   it should "parse 443 from tail" in {
-    UriParser.TryParsePort("https://example.com:443", 20, 23) should equal(Some(443))
-  }
-  it should "return None on port lower than 0" in {
-    UriParser.TryParsePort("-1", 0, 2) should equal(None)
+    UriParser.TryParsePort("https://example.com:443", 20, 23) should equal(443)
   }
 
-  it should "return None on port higher than 65535" in {
-    UriParser.TryParsePort("65536", 0, 5) should equal(None)
+  it should "return -1 on port lower than 0" in {
+    UriParser.TryParsePort("-100", 0, 2) should equal(-1)
+  }
+
+  it should "return -1 on port higher than 65535" in {
+    UriParser.TryParsePort("65536", 0, 5) should equal(-1)
   }
 
   "GetChar" should "decode space" in {

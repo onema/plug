@@ -35,14 +35,10 @@ object Steps {
 }
 
 object UriParser {
-  // NOTE (steveb): XUriParser parses absolute URIs based on RFC3986 (http://www.ietf.org/rfc/rfc3986.txt), with
+  // NOTE (steveb): UriParser parses absolute URIs based on RFC3986 (http://www.ietf.org/rfc/rfc3986.txt), with
   //                the addition of ^, |, [, ], { and } as a valid character in segments, queries, and fragments;
   //                and \ as valid segment separator.
 
-  //--- Constants ---
-
-
-  //--- Class Fields ---
   val HTTP_HASHCODE = "http".hashCode
   val HTTPS_HASHCODE = "https".hashCode
   val FTP_HASHCODE = "ftp".hashCode
@@ -185,7 +181,7 @@ object UriParser {
               None
             } else {
               val hostname = text.substring(last, current)
-              Some(StepResult(current + 1, Steps.determineStep(c), parts.copy(hostname = Some(hostname))))
+              Some(StepResult(current + 1, Steps.determineStep(c), parts.copy(hostname = hostname)))
             }
           } else {
             None
@@ -225,8 +221,8 @@ object UriParser {
 
               // part after ':' is port, parse and validate it
               TryParsePort(text, last, current1) match {
-                case None => None
-                case Some(port) => Some(StepResult(current1 + 1, Steps.determineStep(c1), parts.copy(hostname = Some(hostname), port = Some(port))))
+                case -1 => None
+                case port => Some(StepResult(current1 + 1, Steps.determineStep(c1), parts.copy(hostname = hostname, port = port)))
               }
             }
           } else {
@@ -256,7 +252,7 @@ object UriParser {
                 None
               } else {
                 val hostname = text.substring(last, current1)
-                TryParse2(c1, current1, current1 + 1, decode1, PortNumber, null, parts.copy(hostname = Some(hostname)))
+                TryParse2(c1, current1, current1 + 1, decode1, PortNumber, null, parts.copy(hostname = hostname))
               }
             } else if ((c1 == '/') || (c1 == '\\') || (c1 == '?') || (c1 == '#') || (c1 == Steps.END_OF_STRING)) {
               if (decode) {
@@ -265,7 +261,7 @@ object UriParser {
                 None
               } else {
                 val hostname = text.substring(last, current1)
-                Some(StepResult(current1 + 1, Steps.determineStep(c1), parts.copy(hostname = Some(hostname))))
+                Some(StepResult(current1 + 1, Steps.determineStep(c1), parts.copy(hostname = hostname)))
               }
             } else {
               None
@@ -280,8 +276,8 @@ object UriParser {
             TryParse2(c1, current1, last, decode, branch, null, parts)
           } else if ((c1 == '/') || (c1 == '\\') || (c1 == '?') || (c1 == '#') || (c1 == Steps.END_OF_STRING)) {
             TryParsePort(text, last, current1) match {
-              case None => None
-              case Some(port) => Some(StepResult(current1 + 1, Steps.determineStep(c1), parts.copy(port = Some(port))))
+              case -1 => None
+              case port => Some(StepResult(current1 + 1, Steps.determineStep(c1), parts.copy(port = port)))
             }
           } else {
             None
@@ -304,9 +300,9 @@ object UriParser {
             val current2 = current1 + 1
             val c2 = if (current2 < length) text(current2) else Steps.END_OF_STRING
             if (c2 == ':') {
-              TryParse2(c2, current2, current2 + 1, decode, PortNumber, null, parts.copy(hostname = Some(hostname)))
+              TryParse2(c2, current2, current2 + 1, decode, PortNumber, null, parts.copy(hostname = hostname))
             } else if ((c2 == '/') || (c2 == '\\') || (c2 == '?') || (c2 == '#') || (c2 == Steps.END_OF_STRING)) {
-              Some(StepResult(current2 + 1, Steps.determineStep(c2), parts.copy(hostname = Some(hostname))))
+              Some(StepResult(current2 + 1, Steps.determineStep(c2), parts.copy(hostname = hostname)))
             } else {
               None
             }
@@ -399,11 +395,11 @@ object UriParser {
 
             // add non-empty key with empty value
             val (paramsKey) = iffDecode(text.substring(last, current))
-            parts.copy(query = (paramsKey -> None) :: parts.query)
+            parts.copy(params = parts.params.map((paramsKey -> None) :: _))
           } else if (c == '&') {
 
             // this occurs in the degenerate case of two consecutive ampersands (e.g. "&&")
-            parts.copy(query = ("" -> None) :: parts.query)
+            parts.copy(params = parts.params.map(("" -> None) :: _))
           } else {
             parts
           }
@@ -412,7 +408,7 @@ object UriParser {
 
           // add key with value
           val paramsValue = iffDecode(text.substring(last, current))
-          (parts.copy(query = (paramsKey -> Some(paramsValue)) :: parts.query), true)
+          (parts.copy(params = parts.params.map((paramsKey -> Some(paramsValue)) :: _)), true)
         }
 
         // check if we found a query parameter separator
@@ -421,7 +417,7 @@ object UriParser {
         } else {
 
           // we're done parsing the query string
-          StepResult(next, Steps.determineStep(c), parts1.copy(query = parts1.query.reverse))
+          StepResult(next, Steps.determineStep(c), parts1.copy(params = parts1.params.map(_.reverse)))
         }
       } else if (c == '=') {
         if (parsingKey) {
@@ -434,7 +430,9 @@ object UriParser {
         StepResult(current, Steps.Error, parts)
       }
     }
-    ParseQuery(start, start, null, decode0 = false, parsingKey = true, parts)
+
+    // by virtue of being here, we know there is some kind of query, so we initialize params to Some(Nil)
+    ParseQuery(start, start, null, decode0 = false, parsingKey = true, parts.copy(params = Some(Nil)))
   }
 
   def TryParseFragment(text: String, length: Int, start: Int, parts: Uri): StepResult = {
@@ -560,15 +558,15 @@ object UriParser {
   }
 
   def DeterminePort(uriParts: Uri): Uri = uriParts.port match {
-    case None =>
+    case -1 =>
       val port = uriParts.scheme.toLowerCase.hashCode match {
-        case HTTP_HASHCODE => Some(80)
-        case HTTPS_HASHCODE => Some(443)
-        case FTP_HASHCODE => Some(21)
-        case _ => None
+        case HTTP_HASHCODE => 80
+        case HTTPS_HASHCODE => 443
+        case FTP_HASHCODE => 21
+        case _ => -1
       }
       uriParts.copy(port = port, usesDefaultPort = true)
-    case Some(port) if uriParts.usesDefaultPort => uriParts.copy(usesDefaultPort = false)
+    case port if uriParts.usesDefaultPort => uriParts.copy(usesDefaultPort = false)
     case _ => uriParts
   }
 
@@ -589,16 +587,16 @@ object UriParser {
     GetChar2(start, 0)
   }
 
-  def TryParsePort(text: String, start: Int, end: Int): Option[Int] = {
-    def Parse(current: Int, value: Int): Option[Int] = text(current) match {
+  def TryParsePort(text: String, start: Int, end: Int): Int = {
+    def Parse(current: Int, value: Int): Int = text(current) match {
       case c if c >= '0' && c <= '9' =>
         val v = (c - '0') + value * 10
         // We don't have to check for negative since the only way we can get there is by overflow
         // and we kick out once we exceed 65535 already
-        if (v > 65535) None else if (current + 1 == end) Some(v) else Parse(current + 1, v)
-      case _ => None
+        if (v > 65535) -1 else if (current + 1 == end) v else Parse(current + 1, v)
+      case _ => -1
     }
-    if (start >= end) None else Parse(start, 0)
+    if (start >= end) -1 else Parse(start, 0)
   }
 
 }
