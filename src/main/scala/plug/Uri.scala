@@ -45,7 +45,6 @@ object UriEncoding {
 
 object Uri {
 
-  def intToHexByte(n: Int): Byte = Integer.toHexString(n)(0).toUpper.asInstanceOf[Byte]
 
 
   def isValidCharInUri(ch: Char, level: UriEncoding): Boolean = {
@@ -78,6 +77,13 @@ object Uri {
     }
   }
 
+  def renderParams(params: List[(String, Option[String])]): String = {
+    val builder = new StringBuilder()
+    Internals.renderParamsToBuilder(builder, params)
+    builder.toString()
+  }
+
+
   /** Uri encode a string
     *
     * @param text  Input text
@@ -109,8 +115,8 @@ object Uri {
             case ch@' ' => List[Byte](0x2b) // '+'
             case _ => List[Byte](
               0x25, // '%'
-              intToHexByte((byte >> 4) & 15),
-              intToHexByte(byte & 15))
+              Internals.intToHexByte((byte >> 4) & 15),
+              Internals.intToHexByte(byte & 15))
           }
         }
         new String(encoded, StandardCharsets.US_ASCII)
@@ -226,29 +232,77 @@ object Uri {
     * @return Encoded user info
     */
   def encodeUserInfo(text: String): String = encode(text, UriEncoding.UserInfo)
+
+  def fromString(text: String): Option[Uri] = UriParser.tryParse(text)
+
+  object Internals {
+
+    def intToHexByte(n: Int): Byte = Integer.toHexString(n)(0).toUpper.asInstanceOf[Byte]
+
+    def renderParamsToBuilder(builder: StringBuilder, params: List[(String, Option[String])]): Unit = {
+      def addParam(q: List[(String, Option[String])], first: Boolean = true): Unit = q match {
+        case Nil =>
+        case (key, v) :: rest =>
+          if (!first) {
+            builder.append('&')
+          }
+          builder.append(Uri.encodeQuery(key))
+          v.foreach { value =>
+            builder.append('=')
+            builder.append(Uri.encodeQuery(value))
+          }
+          addParam(rest, first = false)
+      }
+      addParam(params, true)
+    }
+  }
+
 }
 
-case class Uri(scheme: String,
-               user: Option[String] = None,
-               password: Option[String] = None,
-               hostname: String = "",
-               port: Int = -1,
-               segments: List[String] = Nil,
-               params: Option[List[(String, Option[String])]] = None,
-               fragment: Option[String] = None,
-               usesDefaultPort: Boolean = true,
-               trailingSlash: Boolean = false) {
+case class Uri(scheme: String, host: String = "", port: Int = -1, user: Option[String] = None, password: Option[String] = None, segments: List[String] = Nil, params: Option[List[(String, Option[String])]] = None, fragment: Option[String] = None, usesDefaultPort: Boolean = true, trailingSlash: Boolean = false) {
 
-  def userInfo: String = ???
+  def hostPort: String = if (usesDefaultPort) host else s"$host:$port"
 
-  def path: String = ???
+  def schemeHostPort: String = s"$scheme://$hostPort"
 
-  def query: String = ???
+  def schemeHostPortPath: String = s"$schemeHostPort$path"
+
+  def pathQueryFragment: String = ???
+
+  def queryFragment: String = ???
+
+  def authority: String = userInfo match {
+    case None => hostPort
+    case Some(info) => s"$info@$hostPort"
+  }
+
+  def userInfo: Option[String] = user match {
+    case None => password match {
+      case None => None
+      case Some(p) => Some(s":$p")
+    }
+    case Some(u) => password match {
+      case None => Some(u)
+      case Some(p) => Some(s"$u:$p")
+    }
+  }
+
+  def path: String = {
+    val builder = new StringBuilder()
+    segments.foreach { segment =>
+      builder.append('/')
+      builder.append(segment)
+    }
+    if (trailingSlash) builder.append('/')
+    builder.toString()
+  }
+
+  def query: Option[String] = params.map(Uri.renderParams)
 
   // Not overriding toString, because it hides the case class string serialization
-  def asString: String = asString(true)
+  def toUriString: String = toUriString(true)
 
-  def asString(includePassword: Boolean = true) = {
+  def toUriString(includePassword: Boolean = true) = {
     val result = new StringBuilder()
     result.append(scheme)
     result.append("://")
@@ -264,7 +318,7 @@ case class Uri(scheme: String,
     }
 
     // add domain
-    result.append(hostname)
+    result.append(host)
 
     // add port
     if (!usesDefaultPort) {
@@ -282,22 +336,9 @@ case class Uri(scheme: String,
     }
 
     // add query
-    def addParam(q: List[(String, Option[String])], first: Boolean = true): Unit = q match {
-      case Nil =>
-      case (key, v) :: rest =>
-        if (!first) {
-          result.append('&')
-        }
-        result.append(Uri.encodeQuery(key))
-        v.foreach { value =>
-          result.append('=')
-          result.append(Uri.encodeQuery(value))
-        }
-        addParam(rest, first = false)
-    }
     params.foreach { p =>
       result.append('?')
-      addParam(p, first = true)
+      Uri.Internals.renderParamsToBuilder(result, p)
     }
 
     // add fragment
