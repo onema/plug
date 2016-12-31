@@ -15,6 +15,26 @@ class UriParserSpec extends FlatSpec with Matchers {
     r should equal(Some(7, "http"))
   }
 
+  "tryParsePath" should "extract segments from path" in {
+    val path = "a/b/c"
+    val steps = UriParser.tryParsePath(path,path.length,0,Uri("parse"))
+    steps.parts.segments should equal(List("a","b","c"))
+    steps.parts.trailingSlash shouldBe false
+  }
+
+  it should "extract trailing slash from path" in {
+    val path = "a/b/c/"
+    val steps = UriParser.tryParsePath(path,path.length,0,Uri("parse"))
+    steps.parts.segments should equal(List("a","b","c"))
+    steps.parts.trailingSlash shouldBe true
+  }
+
+  it should "parse leading '/' as part of first segment" in {
+    val path = "/a/b/c"
+    val steps = UriParser.tryParsePath(path,path.length,0,Uri("parse"))
+    steps.parts.segments should equal(List("/a","b","c"))
+  }
+
   "tryParsePort" should "parse 80" in {
     UriParser.tryParsePort("80", 0, 2) should equal(80)
   }

@@ -206,10 +206,13 @@ object Uri {
 
     val schemeRegex = """[a-zA-Z][\w\+\-\.]*""".r
     val hostRegex = """((\[[a-fA-F\d:\.]*\])|([\w\-\._~%!\$&'\(\)\*\+,;=]*))""".r
+    val segmentRegex = """^/*[\w\-\._~%!\$&'\(\)\*\+,;=:@\^\|\[\]{}]*$""".r
 
     def isValidScheme(scheme: String) = schemeRegex.findFirstIn(scheme).nonEmpty
 
     def isValidHost(host: String) = hostRegex.findFirstIn(host).nonEmpty
+
+    def isValidSegment(segment: String) = segmentRegex.findFirstMatchIn(segment).nonEmpty
 
     def intToHexByte(n: Int): Byte = Integer.toHexString(n)(0).toUpper.asInstanceOf[Byte]
 
@@ -421,7 +424,75 @@ case class Uri(scheme: String, host: String = "", port: Int = -1, user: Option[S
     * @return
     */
   def query: Option[String] = params.map(Uri.renderParams)
-  
+
+  /** Create a new Uri at a appended path.
+    *
+    * <p>An empty trailing segment indicates a trailing slash for the resulting Uri.
+    *
+    * <p>Throws NullPointerException on a non-trailing null segment.
+    * <p>Throws IllegalArgumentException on a non-trailing empty segment.
+    * <p>Throws IllegalArgumentException on a segment with illegal characters.
+    *
+    * @param segments Path segments.
+    * @return New uri instance.
+    */
+  def at(segments: String*): Uri = if (segments.isEmpty) this
+  else {
+    def checkSegments(segments: List[String], acc: List[String]): (List[String], Boolean) = segments match {
+      case h :: Nil if h == null || h.isEmpty => (acc.reverse, true)
+      case h :: Nil => ((h :: acc).reverse, false)
+      case h :: tail if h == null =>
+        throw new NullPointerException("A segment was null")
+      case h :: tail if h == null || h.isEmpty =>
+        throw new IllegalArgumentException("A non-trailing segment was empty")
+      case h :: tail if !Uri.Internals.isValidSegment(h) =>
+        throw new IllegalArgumentException(s"Segment '$h' containts invalid characters")
+      case h :: tail => checkSegments(tail, h :: acc)
+    }
+    val (newSegments, trailingSlash) = checkSegments(segments.toList, this.segments.reverse)
+    copy(segments = newSegments, trailingSlash = trailingSlash)
+  }
+
+  /** Create a new Uri with appended path/query/fragment.
+    *
+    * <p>Returns the original Uri, if pathQueryFragment cannot be parsed
+    * <p>Throws NullPointerException on null pathQueryFragment.
+    * <p>Throws IllegalArgumentException on empty pathQueryFragment.
+    *
+    * @param pathQueryFragment Path/query/fragment string.
+    * @return New Uri instance.
+    */
+  def atPath(pathQueryFragment: String): Uri = pathQueryFragment match {
+    case x if x == null =>
+      throw new NullPointerException("pathQueryFragment cannot be null")
+    case x if x.isEmpty =>
+      throw new IllegalArgumentException("pathQueryFragment cannot be empty")
+    case _ =>
+      val uriToParse = pathQueryFragment(0) match {
+        case '/' => s"X://$pathQueryFragment"
+        case _ => s"X:///$pathQueryFragment"
+      }
+      // TODO: run only the parts of UriParser needed for pathQueryFragment
+      UriParser.tryParse(uriToParse) match {
+        case None => this
+        case Some(uri) =>
+          Iff(this).orElse(uri.segments.nonEmpty) { x =>
+            x.at(uri.segments: _*)
+            val uri1 = at(uri.segments: _*)
+            if (uri.trailingSlash) uri1.withTrailingSlash() else uri1.withoutTrailingSlash()
+          }.orElse(uri.params.nonEmpty)(_.withParams(uri.params.get))
+            .orElse(uri.fragment.nonEmpty)(_.withFragment(uri.fragment))
+            .get
+      }
+  }
+
+  /** Create a new Uri at a different absolute path.
+    *
+    * @param pathQueryFragment Path/query/fragment string.
+    * @return New uri instance.
+    */
+  def atAbsolutePath(pathQueryFragment: String): Uri = withoutPathQueryFragment().atPath(path)
+
   /** Create a new Uri based on the current instance with an additional query parameter.
     *
     * @param key   Query key.

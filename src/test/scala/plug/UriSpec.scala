@@ -8,6 +8,7 @@ import org.scalatest._
 class UriSpec extends FlatSpec with Matchers {
 
   val baseUri = Uri.fromString("http://example.com").get
+  val basePathUri = baseUri.copy(segments = List("a", "b", "c"))
 
   "encode" should "convert char é to several encoded elements %C3%A9" in {
     Uri.encode("créate", UriEncoding.Default) should equal("cr%C3%A9ate")
@@ -55,6 +56,73 @@ class UriSpec extends FlatSpec with Matchers {
 
   it should "decode value" in {
     Uri.parseParamsAsPairs("foo=baz%20bar") should equal(List("foo" -> Some("baz bar")))
+  }
+
+  "at" should "append params to existing path" in {
+    val uri = basePathUri.at("x", "y", "z")
+    uri.segments should equal(List("a", "b", "c", "x", "y", "z"))
+    uri.trailingSlash shouldBe false
+  }
+
+  it should "treat empty segment as trailing slash" in {
+    val uri = basePathUri.at("x", "y", "")
+    uri.segments should equal(List("a", "b", "c", "x", "y"))
+    uri.trailingSlash shouldBe true
+  }
+
+  "atPath" should "append path, query & replace fragment" in {
+    val uri = basePathUri.withFragment("foo").withParam("a", "b").atPath("x/y?c=d#baz")
+    uri.segments should equal(List("a", "b", "c", "x", "y"))
+    uri.params should equal(Some(List("a" -> Some("b"), "c" -> Some("d"))))
+    uri.fragment should equal(Some("baz"))
+  }
+
+  it should "be able to parse just path" in {
+    val uri = basePathUri.withFragment("foo").withParam("a", "b").atPath("x/y")
+    uri.segments should equal(List("a", "b", "c", "x", "y"))
+    uri.params should equal(Some(List("a" -> Some("b"))))
+    uri.fragment should equal(Some("foo"))
+  }
+
+  it should "ignore leading '/'" in {
+    basePathUri.atPath("/x/y").segments should equal(List("a", "b", "c", "x", "y"))
+  }
+
+  it should "respect trailing '/'" in {
+    val uri = basePathUri.atPath("x/y/")
+    uri.segments should equal(List("a", "b", "c", "x", "y"))
+    uri.trailingSlash shouldBe true
+  }
+
+  it should "be able to parse just query" in {
+    val uri = basePathUri.withFragment("foo").withParam("a", "b").atPath("?c=d")
+    uri.segments should equal(List("a", "b", "c"))
+    uri.params should equal(Some(List("a" -> Some("b"), "c" -> Some("d"))))
+    uri.fragment should equal(Some("foo"))
+  }
+
+  it should "be able to parse just fragment" in {
+    val uri = basePathUri.withFragment("foo").withParam("a", "b").atPath("#baz")
+    uri.segments should equal(List("a", "b", "c"))
+    uri.params should equal(Some(List("a" -> Some("b"))))
+    uri.fragment should equal(Some("baz"))
+  }
+
+  "atAbsolutePath" should "replace path & fragment, but append query" in {
+    val uri = basePathUri.withFragment("foo").withParam("a", "b").atAbsolutePath("x/y?c=d#baz")
+    uri.segments should equal(List("x", "y"))
+    uri.params should equal(Some(List("a" -> Some("b"), "c" -> Some("d"))))
+    uri.fragment should equal(Some("baz"))
+  }
+
+  it should "ignore leading '/'" in {
+    basePathUri.atAbsolutePath("/x/y").segments should equal(List("a", "b", "c", "x", "y"))
+  }
+
+  it should "respect trailing '/'" in {
+    val uri = basePathUri.atPath("x/y/")
+    uri.segments should equal(List("x", "y"))
+    uri.trailingSlash shouldBe true
   }
 
   "toUriString" should "replace password when requested" in {
@@ -161,8 +229,8 @@ class UriSpec extends FlatSpec with Matchers {
   }
 
   "withoutParams(String)" should "remove all occurences of key from existing params list" in {
-    baseUri.copy(params=Some(List("a"->Some("b"),"c"->Some("d"),"a"->Some("b2"),"e"->Some("f"))))
-      .withoutParams("a").params should equal(Some(List("c"->Some("d"),"e"->Some("f"))))
+    baseUri.copy(params = Some(List("a" -> Some("b"), "c" -> Some("d"), "a" -> Some("b2"), "e" -> Some("f"))))
+      .withoutParams("a").params should equal(Some(List("c" -> Some("d"), "e" -> Some("f"))))
   }
 
   "withCredentials" should "add credenials" in {
@@ -196,7 +264,7 @@ class UriSpec extends FlatSpec with Matchers {
   }
 
   "withCredentialsFrom" should "copy credentials from other uri" in {
-    val other = baseUri.withCredentials(Some("foo"),Some("bar"))
+    val other = baseUri.withCredentials(Some("foo"), Some("bar"))
     val uri = baseUri.withCredentialsFrom(other)
     uri.user should equal(Some("foo"))
     uri.password should equal(Some("bar"))
@@ -217,7 +285,7 @@ class UriSpec extends FlatSpec with Matchers {
   }
 
   it should "create trailing '#' when provided empty string" in {
-    baseUri.withFragment("").toUriString() should equal(baseUri.toUriString+"#")
+    baseUri.withFragment("").toUriString() should equal(baseUri.toUriString + "#")
   }
 
   "withFragment(Option[String])" should "remove fragment if provided None" in {
@@ -229,55 +297,55 @@ class UriSpec extends FlatSpec with Matchers {
   }
 
   "withFirstSegments" should "only contain leading path elements" in {
-    baseUri.copy(segments = List("a","b","c")).withFirstSegments(2).segments should equal(
-      List("a","b")
+    basePathUri.withFirstSegments(2).segments should equal(
+      List("a", "b")
     )
   }
 
   it should "remove all segments when provided 0" in {
-    baseUri.copy(segments = List("a","b","c")).withFirstSegments(0).segments should equal(Nil)
+    basePathUri.withFirstSegments(0).segments should equal(Nil)
   }
 
   it should "leave path unchanged if provided number greater than segment count" in {
-    baseUri.copy(segments = List("a","b","c")).withFirstSegments(5).segments should equal(
-      List("a","b","c")
+    basePathUri.withFirstSegments(5).segments should equal(
+      List("a", "b", "c")
     )
   }
 
   "wihoutFirstSegments" should "trim 'prefix' from path" in {
-    baseUri.copy(segments = List("a","b","c")).withoutFirstSegments(1).segments should equal(
-      List("b","c")
+    basePathUri.withoutFirstSegments(1).segments should equal(
+      List("b", "c")
     )
   }
 
   it should "leave path unchanged if provided 0" in {
-    baseUri.copy(segments = List("a","b","c")).withoutFirstSegments(0).segments should equal(
-      List("a","b","c")
+    basePathUri.withoutFirstSegments(0).segments should equal(
+      List("a", "b", "c")
     )
   }
 
   it should "strip path if provided number greater than segment count" in {
-    baseUri.copy(segments = List("a","b","c")).withoutFirstSegments(5).segments should equal(Nil)
+    basePathUri.withoutFirstSegments(5).segments should equal(Nil)
   }
 
   "withoutLastSegment" should "remove last segment" in {
-    baseUri.copy(segments = List("a","b","c")).withoutLastSegment().segments should equal(
-      List("a","b")
+    basePathUri.withoutLastSegment().segments should equal(
+      List("a", "b")
     )
   }
 
   "withoutLastSegments" should "remove trailing segments" in {
-    baseUri.copy(segments = List("a","b","c")).withoutLastSegments(2).segments should equal(
+    basePathUri.withoutLastSegments(2).segments should equal(
       List("a")
     )
   }
 
   it should "strip path if provided number larger than segments" in {
-    baseUri.copy(segments = List("a","b","c")).withoutLastSegments(5).segments should equal(Nil)
+    basePathUri.withoutLastSegments(5).segments should equal(Nil)
   }
 
   "withoutPath" should "strip path from uri" in {
-    baseUri.copy(segments = List("a","b","c")).withoutPath().segments should equal(Nil)
+    basePathUri.withoutPath().segments should equal(Nil)
   }
 
   "withoutPathQueryFragment" should "strip all past host:port" in {
@@ -327,7 +395,7 @@ class UriSpec extends FlatSpec with Matchers {
   }
 
   it should "set usesDefaultPort when new port is default" in {
-    val uri = baseUri.copy(port=882)
+    val uri = baseUri.copy(port = 882)
     uri.usesDefaultPort shouldBe false
     val uri2 = uri.withPort(80)
     uri2.port should equal(80)
