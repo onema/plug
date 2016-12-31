@@ -42,6 +42,7 @@ object UriParser {
   val HTTP_HASHCODE = "http".hashCode
   val HTTPS_HASHCODE = "https".hashCode
   val FTP_HASHCODE = "ftp".hashCode
+  val MAX_PORT = 65535
 
   case class StepResult(current: Int,
                         nextStep: NextStep,
@@ -557,17 +558,16 @@ object UriParser {
     new String(bytes, StandardCharsets.UTF_8)
   }
 
-  def determinePort(uriParts: Uri): Uri = uriParts.port match {
+  def determinePort(uri: Uri): Uri = uri.port match {
     case -1 =>
-      val port = uriParts.scheme.toLowerCase.hashCode match {
-        case HTTP_HASHCODE => 80
-        case HTTPS_HASHCODE => 443
-        case FTP_HASHCODE => 21
+      val port = uri.scheme.toLowerCase.hashCode match {
+        case UriSchemeDefaultPort.HTTP.schemeHashCode => 80
+        case UriSchemeDefaultPort.HTTPS.schemeHashCode => 443
+        case UriSchemeDefaultPort.FTP.schemeHashCode => 21
         case _ => -1
       }
-      uriParts.copy(port = port, usesDefaultPort = true)
-    case port if uriParts.usesDefaultPort => uriParts.copy(usesDefaultPort = false)
-    case _ => uriParts
+      uri.copy(port = port)
+    case _ => uri
   }
 
   def getChar(text: String, start: Int, length: Int): Int = {
@@ -593,7 +593,7 @@ object UriParser {
         val v = (c - '0') + value * 10
         // We don't have to check for negative since the only way we can get there is by overflow
         // and we kick out once we exceed 65535 already
-        if (v > 65535) -1 else if (current + 1 == end) v else parsePort(current + 1, v)
+        if (v > MAX_PORT) -1 else if (current + 1 == end) v else parsePort(current + 1, v)
       case _ => -1
     }
     if (start >= end) -1 else parsePort(start, 0)

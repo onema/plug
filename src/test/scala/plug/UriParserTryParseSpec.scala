@@ -16,12 +16,13 @@ class UriParsertryParseSpec extends FlatSpec with Matchers {
 
   it should "parse default port from https scheme" in assertParse(
     "https://example.com:443",
-    Some(Uri(scheme = "https", host = "example.com", port = 443, usesDefaultPort = false))
+    Some(Uri(scheme = "https", host = "example.com", port = 443)),
+    Some("https://example.com")
   )
 
   it should "parse non-default port from https scheme" in assertParse(
     "https://example.com:444",
-    Some(Uri(scheme = "https", host = "example.com", port = 444, usesDefaultPort = false))
+    Some(Uri(scheme = "https", host = "example.com", port = 444))
   )
 
   it should "parse ftp scheme and hostname" in assertParse(
@@ -31,12 +32,13 @@ class UriParsertryParseSpec extends FlatSpec with Matchers {
 
   it should "parse default port from ftp scheme" in assertParse(
     "ftp://example.com:21",
-    Some(Uri(scheme = "ftp", host = "example.com", port = 21, usesDefaultPort = false))
+    Some(Uri(scheme = "ftp", host = "example.com", port = 21)),
+    Some("ftp://example.com")
   )
 
   it should "parse non-default port from ftp scheme" in assertParse(
     "ftp://example.com:22",
-    Some(Uri(scheme = "ftp", host = "example.com", port = 22, usesDefaultPort = false))
+    Some(Uri(scheme = "ftp", host = "example.com", port = 22))
   )
 
   it should "parse hostname for unknown scheme without port" in assertParse(
@@ -46,7 +48,7 @@ class UriParsertryParseSpec extends FlatSpec with Matchers {
 
   it should "parse hostname and explicit port for unknown scheme" in assertParse(
     "unknown://example.com:123",
-    Some(Uri(scheme = "unknown", host = "example.com", port = 123, usesDefaultPort = false))
+    Some(Uri(scheme = "unknown", host = "example.com", port = 123))
   )
 
   it should "ignore case in scheme" in assertParse(
@@ -68,12 +70,13 @@ class UriParsertryParseSpec extends FlatSpec with Matchers {
 
   "tryParse [port]" should "parse http with default port" in assertParse(
     "http://example.com:80",
-    Some(Uri(scheme = "http", host = "example.com", port = 80, usesDefaultPort = false))
+    Some(Uri(scheme = "http", host = "example.com", port = 80)),
+    Some("http://example.com")
   )
 
   it should "parse http with non-default port" in assertParse(
     "http://example.com:8888",
-    Some(Uri(scheme = "http", host = "example.com", port = 8888, usesDefaultPort = false))
+    Some(Uri(scheme = "http", host = "example.com", port = 8888))
   )
 
   it should "fail to parse uri with invalid port number" in assertParse("http://example.com:65536", None)
@@ -91,14 +94,16 @@ class UriParsertryParseSpec extends FlatSpec with Matchers {
     "http://8.8.8.8",
     Some(Uri(scheme = "http", host = "8.8.8.8", port = 80))
   )
+
   it should "parse IPv4 with default port as host name" in assertParse(
     "http://8.8.8.8:80",
-    Some(Uri(scheme = "http", host = "8.8.8.8", port = 80, usesDefaultPort = false))
+    Some(Uri(scheme = "http", host = "8.8.8.8", port = 80)),
+    Some("http://8.8.8.8")
   )
 
   it should "parse IPv4 with non-default port as host name" in assertParse(
     "http://8.8.8.8:8888",
-    Some(Uri(scheme = "http", host = "8.8.8.8", port = 8888, usesDefaultPort = false))
+    Some(Uri(scheme = "http", host = "8.8.8.8", port = 8888))
   )
   it should "parse IPv4 with path" in assertParse(
     "http://8.8.8.8/path",
@@ -114,17 +119,19 @@ class UriParsertryParseSpec extends FlatSpec with Matchers {
     "http://[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]",
     Some(Uri(scheme = "http", host = "[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]", port = 80))
   )
+
   it should "fail to parse partial IPv6 address" in assertParse("http://[2001:0db8:85a3", None)
   it should "fail to parse IPv6 address followed by invalid char" in assertParse("http://[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]<", None)
 
   it should "parse IPv6 with default port" in assertParse(
     "http://[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]:80",
-    Some(Uri(scheme = "http", host = "[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]", port = 80, usesDefaultPort = false))
+    Some(Uri(scheme = "http", host = "[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]", port = 80)),
+    Some("http://[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]")
   )
 
   it should "parse IPv6 with non-default port" in assertParse(
     "http://[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]:8888",
-    Some(Uri(scheme = "http", host = "[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]", port = 8888, usesDefaultPort = false))
+    Some(Uri(scheme = "http", host = "[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]", port = 8888))
   )
 
   it should "parse IPv6 with default path" in assertParse(
@@ -151,7 +158,7 @@ class UriParsertryParseSpec extends FlatSpec with Matchers {
   )
   it should "parse empty hostname with port" in assertParse(
     "http://:8888",
-    Some(Uri(scheme = "http", host = "", port = 8888, usesDefaultPort = false))
+    Some(Uri(scheme = "http", host = "", port = 8888))
   )
   it should "parse empty hostname with path" in assertParse(
     "http:///path",
@@ -266,7 +273,8 @@ class UriParsertryParseSpec extends FlatSpec with Matchers {
 
   it should "track that hostname with port had a trailing slash" in assertParse(
     "http://example.com:80/",
-    Some(Uri(scheme = "http", host = "example.com", port = 80, usesDefaultPort = false, trailingSlash = true))
+    Some(Uri(scheme = "http", host = "example.com", port = 80, trailingSlash = true)),
+    Some("http://example.com/")
   )
 
   it should "track that IPv4 hostname had a trailing slash" in assertParse(
@@ -511,17 +519,17 @@ class UriParsertryParseSpec extends FlatSpec with Matchers {
 
   it should "parse user/pass/host/port and encoded segments and double slash in path and mixed query params" in assertParse(
     "http://user:password@example.com:81/path/foo%20bar/path//@blah?ready&set=&go=foo/bar",
-    Some(Uri(scheme = "http", host = "example.com", port = 81, user = Some("user"), password = Some("password"), segments = List("path", "foo%20bar", "path", "/@blah"), params = Some(List("ready" -> None, "set" -> Some(""), "go" -> Some("foo/bar"))), usesDefaultPort = false))
+    Some(Uri(scheme = "http", host = "example.com", port = 81, user = Some("user"), password = Some("password"), segments = List("path", "foo%20bar", "path", "/@blah"), params = Some(List("ready" -> None, "set" -> Some(""), "go" -> Some("foo/bar")))))
   )
 
   it should "parse user/pass/host/port and encoded segments and double slash in path and fragment" in assertParse(
     "http://user:password@example.com:81/path/foo%20bar/path//@blah#yo",
-    Some(Uri(scheme = "http", host = "example.com", port = 81, user = Some("user"), password = Some("password"), segments = List("path", "foo%20bar", "path", "/@blah"), fragment = Some("yo"), usesDefaultPort = false))
+    Some(Uri(scheme = "http", host = "example.com", port = 81, user = Some("user"), password = Some("password"), segments = List("path", "foo%20bar", "path", "/@blah"), fragment = Some("yo")))
   )
 
   it should "parse user/pass/host/port and encoded segments and double slash in path, mixed query and fragment" in assertParse(
     "http://user:password@example.com:81/path/foo%20bar/path//@blah/?ready&set=&go=foo/bar#yo",
-    Some(Uri(scheme = "http", host = "example.com", port = 81, user = Some("user"), password = Some("password"), segments = List("path", "foo%20bar", "path", "/@blah"), params = Some(List("ready" -> None, "set" -> Some(""), "go" -> Some("foo/bar"))), fragment = Some("yo"), usesDefaultPort = false, trailingSlash = true))
+    Some(Uri(scheme = "http", host = "example.com", port = 81, user = Some("user"), password = Some("password"), segments = List("path", "foo%20bar", "path", "/@blah"), params = Some(List("ready" -> None, "set" -> Some(""), "go" -> Some("foo/bar"))), fragment = Some("yo"), trailingSlash = true))
   )
 
   it should "parse ftp hostname with path" in assertParse(
@@ -531,7 +539,7 @@ class UriParsertryParseSpec extends FlatSpec with Matchers {
 
   it should "parse ftp with weird hostname and empty fragment" in assertParse(
     "ftp://cnn.example.com&story=breaking_news@10.0.0.1/top_story.htm#",
-    Some(Uri(scheme = "ftp", host = "10.0.0.1", port = 21, user = Some("cnn.example.com&story=breaking_news"), segments = List("top_story.htm"), fragment = Some(""), usesDefaultPort = true))
+    Some(Uri(scheme = "ftp", host = "10.0.0.1", port = 21, user = Some("cnn.example.com&story=breaking_news"), segments = List("top_story.htm"), fragment = Some("")))
   )
 
   it should "parse special characters in path and query and fragment" in assertParse(

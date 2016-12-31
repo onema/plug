@@ -28,23 +28,37 @@ object UriEncoding {
   /** Use only default encoding */
   case object Default extends UriEncoding
 
-
   /** Perform additional encoding for [[Uri.userInfo]] */
-  case object UserInfo extends UriEncoding
+  object UserInfo extends UriEncoding
 
   /** Perform additional encoding for [[Uri.path]] */
-  case object Segment extends UriEncoding
+  object Segment extends UriEncoding
 
   /** Perform additional encoding for [[Uri.query]] */
-  case object Query extends UriEncoding
+  object Query extends UriEncoding
 
   /** Perform additional encoding for [[Uri.fragment]] */
-  case object Fragment extends UriEncoding
+  object Fragment extends UriEncoding
 
 }
 
-object Uri {
+object UriSchemeDefaultPort {
 
+  sealed case class SchemePort(port: Int, schemeHashCode: Int)
+
+  val HTTP = SchemePort(80, "http".hashCode)
+  val HTTPS = SchemePort(443, "https".hashCode)
+  val FTP = SchemePort(21, "ftp".hashCode)
+
+  def getSchemePort(scheme: String): Int = scheme.toLowerCase.hashCode match {
+    case UriSchemeDefaultPort.HTTP.schemeHashCode => 80
+    case UriSchemeDefaultPort.HTTPS.schemeHashCode => 443
+    case UriSchemeDefaultPort.FTP.schemeHashCode => 21
+    case _ => -1
+  }
+}
+
+object Uri {
 
 
   def isValidCharInUri(ch: Char, level: UriEncoding): Boolean = {
@@ -90,99 +104,15 @@ object Uri {
     * @param level Encoding level
     * @return Encoded string
     */
-  def encode(text: String, level: UriEncoding): String = {
-    if (text == null || text.isEmpty) {
-      text
-    } else {
-      val original = text.getBytes(StandardCharsets.UTF_8)
+  def encode(text: String, level: UriEncoding): String = Internals.encode(text, level, Internals.encodeByte)
 
-      // count how many characters are affected by the encoding
-      val (charsToReplace, charsToEncode) = original.foldLeft((0, 0)) {
-        case ((r, e), ' ') => (r + 1, e)
-        case ((r, e), b) if !isValidCharInUri(b.asInstanceOf[Char], level) => (r, e + 1)
-        case (x, _) => x
-      }
-
-      // check if any characters are affected
-      if (charsToReplace == 0 && charsToEncode == 0) {
-        text
-      } else {
-
-        // copy, replace, and encode characters
-        val encoded = original.flatMap { byte =>
-          byte.asInstanceOf[Char] match {
-            case ch if isValidCharInUri(ch, level) => List(byte)
-            case ch@' ' => List[Byte](0x2b) // '+'
-            case _ => List[Byte](
-              0x25, // '%'
-              Internals.intToHexByte((byte >> 4) & 15),
-              Internals.intToHexByte(byte & 15))
-          }
-        }
-        new String(encoded, StandardCharsets.US_ASCII)
-      }
-    }
-  }
-
-
-  /// <summary>
-  /// Double encode a string.
-  /// </summary>
-  /// <param name="text">Input text.</param>
-  /// <param name="level">Encoding level.</param>
-  /// <returns>Encoded string.</returns>
-  def doubleEncode(text: String, level: UriEncoding): String = ???
-
-  //  {
-  //    if(string.IsNullOrEmpty(text)) {
-  //      return text;
-  //    }
-  //    var original = Encoding.UTF8.GetBytes(text);
-  //
-  //    // count how many characters are affected by the encoding
-  //    var charsToReplace = 0;
-  //    var charsToEncode = 0;
-  //    var length = original.Length;
-  //    for(var i = 0; i < length; i++) {
-  //      var ch = (char)original[i];
-  //      if(ch == ' ') {
-  //        charsToReplace++;
-  //      } else if(!IsValidCharInUri(ch, level)) {
-  //        charsToEncode++;
-  //      }
-  //    }
-  //
-  //    // check if any characters are affected
-  //    if((charsToReplace == 0) && (charsToEncode == 0)) {
-  //      return text;
-  //    }
-  //
-  //    // copy, replace, and encode characters
-  //    var encoded = new byte[length + (charsToReplace * 2) + (charsToEncode * 4)];
-  //    var index = 0;
-  //    for(var j = 0; j < length; j++) {
-  //      var asciiByte = original[j];
-  //      var asciiChar = (char)asciiByte;
-  //      if(IsValidCharInUri(asciiChar, level)) {
-  //        encoded[index++] = asciiByte;
-  //      } else if(asciiChar == ' ') {
-  //
-  //        // replace ' ' with '%2b'
-  //        encoded[index++] = 0x25; // '%'
-  //        encoded[index++] = (byte)'2';
-  //        encoded[index++] = (byte)'b';
-  //      } else {
-  //
-  //        // replace char with '%25' + code
-  //        encoded[index++] = 0x25; // '%'
-  //        encoded[index++] = (byte)'2';
-  //        encoded[index++] = (byte)'5';
-  //        encoded[index++] = (byte)StringUtil.IntToHexChar((asciiByte >> 4) & 15);
-  //        encoded[index++] = (byte)StringUtil.IntToHexChar(asciiByte & 15);
-  //      }
-  //    }
-  //    return Encoding.ASCII.GetString(encoded);
-  //  }
+  /** Double encode a string
+    *
+    * @param text  Input text
+    * @param level Encoding level
+    * @return Encoded string
+    */
+  def doubleEncode(text: String, level: UriEncoding): String = Internals.encode(text, level, Internals.doubleEncodeByte)
 
   /** Uri encode a string
     *
@@ -233,11 +163,111 @@ object Uri {
     */
   def encodeUserInfo(text: String): String = encode(text, UriEncoding.UserInfo)
 
+  def parseParamsAsPairs(query: String): List[(String, Option[String])] = {
+    def parseParams(current: Int, keyIndex: Int, valueIndex: Int,
+                    acc: List[(String, Option[String])]): List[(String, Option[String])] = {
+      def getKey: String = if (keyIndex == -1) {
+        ""
+      } else if (valueIndex == -1) {
+        UriParser.decodeString(query.substring(keyIndex, current))
+      } else {
+        UriParser.decodeString(query.substring(keyIndex, valueIndex - 1))
+      }
+      def getValue: Option[String] = if (valueIndex == -1) {
+        None
+      } else {
+        Some(UriParser.decodeString(query.substring(valueIndex, current)))
+      }
+      if (current == query.length) {
+        if (keyIndex > -1 || valueIndex > -1) {
+          (getKey -> getValue) :: acc
+        } else {
+          acc
+        }
+      } else {
+        query(current) match {
+          case '=' => parseParams(current + 1, keyIndex, current + 1, acc)
+          case '&' =>
+            val key = getKey
+            val value = getValue
+            parseParams(current + 1, current + 1, -1, (key -> value) :: acc)
+          case _ if keyIndex == -1 => parseParams(current + 1, current, valueIndex, acc)
+          case _ => parseParams(current + 1, keyIndex, valueIndex, acc)
+        }
+
+      }
+    }
+    parseParams(0, -1, -1, Nil).reverse
+  }
+
   def fromString(text: String): Option[Uri] = UriParser.tryParse(text)
 
   object Internals {
 
+    val schemeRegex = """[a-zA-Z][\w\+\-\.]*""".r
+    val hostRegex = """((\[[a-fA-F\d:\.]*\])|([\w\-\._~%!\$&'\(\)\*\+,;=]*))""".r
+
+    def isValidScheme(scheme: String) = schemeRegex.findFirstIn(scheme).nonEmpty
+
+    def isValidHost(host: String) = hostRegex.findFirstIn(host).nonEmpty
+
     def intToHexByte(n: Int): Byte = Integer.toHexString(n)(0).toUpper.asInstanceOf[Byte]
+
+    def encode(text: String, level: UriEncoding, byteEncoder: (Byte, UriEncoding) => List[Byte]) = {
+      if (text == null || text.isEmpty) {
+        text
+      } else {
+        val original = text.getBytes(StandardCharsets.UTF_8)
+
+        // count how many characters are affected by the encoding
+        val (charsToReplace, charsToEncode) = original.foldLeft((0, 0)) {
+          case ((r, e), ' ') => (r + 1, e)
+          case ((r, e), b) if !isValidCharInUri(b.asInstanceOf[Char], level) => (r, e + 1)
+          case (x, _) => x
+        }
+
+        // check if any characters are affected
+        if (charsToReplace == 0 && charsToEncode == 0) {
+          text
+        } else {
+
+          // copy, replace, and encode characters
+          val encoded = original.flatMap { byte =>
+            byte.asInstanceOf[Char] match {
+              case ch if isValidCharInUri(ch, level) => List(byte)
+              case ' ' => List[Byte](0x2b) // '+'
+              case _ => List[Byte](
+                0x25, // '%'
+                Internals.intToHexByte((byte >> 4) & 15),
+                Internals.intToHexByte(byte & 15))
+            }
+          }
+          new String(encoded, StandardCharsets.US_ASCII)
+        }
+      }
+    }
+
+    def encodeByte(byte: Byte, level: UriEncoding): List[Byte] =
+      byte.asInstanceOf[Char] match {
+        case ch if isValidCharInUri(ch, level) => List(byte)
+        case ' ' => List[Byte](0x2b) // '+'
+        case _ => List[Byte](
+          0x25, // '%'
+          Internals.intToHexByte((byte >> 4) & 15),
+          Internals.intToHexByte(byte & 15))
+      }
+
+    def doubleEncodeByte(byte: Byte, level: UriEncoding): List[Byte] =
+      byte.asInstanceOf[Char] match {
+        case ch if isValidCharInUri(ch, level) => List(byte)
+        case ' ' => List[Byte](0x25, '2', 'b') // '%2b'
+        case _ => List[Byte](
+          0x25, // '%'
+          '2',
+          '5',
+          Internals.intToHexByte((byte >> 4) & 15),
+          Internals.intToHexByte(byte & 15))
+      }
 
     def renderParamsToBuilder(builder: StringBuilder, params: List[(String, Option[String])]): Unit = {
       def addParam(q: List[(String, Option[String])], first: Boolean = true): Unit = q match {
@@ -253,29 +283,114 @@ object Uri {
           }
           addParam(rest, first = false)
       }
-      addParam(params, true)
+      addParam(params)
     }
   }
 
 }
 
-case class Uri(scheme: String, host: String = "", port: Int = -1, user: Option[String] = None, password: Option[String] = None, segments: List[String] = Nil, params: Option[List[(String, Option[String])]] = None, fragment: Option[String] = None, usesDefaultPort: Boolean = true, trailingSlash: Boolean = false) {
+/** An immutable case class representation of a Uniform Resource Identifier.
+  *
+  * <p>It provides a fluent interface for derive other Uri's in addition to the regular case class `copy` mechanism.
+  *
+  * @param scheme        Uri Scheme.
+  * @param host          Host.
+  * @param port          Port.
+  * @param user          User part of Uri Authority.
+  * @param password      Password part of Uri Authority.
+  * @param segments      Uri Path, represented by an ordered list of segments without their '/' separator.
+  * @param params        Ordered list of query key/value pairs. An empty list represents the existence of a trailing '?'
+  *                      without any parameters. Empty keys, e.g. '&&', '&=', or leading/trailing '&' are represented by empty
+  *                      string, while empty values are [[None]].
+  * @param fragment      Uri fragment.
+  * @param trailingSlash true if the path has a trailing '/'.
+  */
+case class Uri(scheme: String, host: String = "", port: Int = -1, user: Option[String] = None, password: Option[String] = None, segments: List[String] = Nil, params: Option[List[(String, Option[String])]] = None, fragment: Option[String] = None, trailingSlash: Boolean = false) {
 
+  // TODO: This should be extendable so that other schemes can provide their own default port
+  lazy val usesDefaultPort: Boolean = if (port == -1) true // Is this what we want to do for -1 on all schemes?
+  else
+    UriSchemeDefaultPort.SchemePort(port, scheme.toLowerCase.hashCode) match {
+      case UriSchemeDefaultPort.HTTP => true
+      case UriSchemeDefaultPort.HTTPS => true
+      case UriSchemeDefaultPort.FTP => true
+      case _ => false
+    }
+
+  /** [[host]] [ + ":" + [[port]] ]
+    *
+    * @return
+    */
   def hostPort: String = if (usesDefaultPort) host else s"$host:$port"
 
+  /** [[scheme]] + "://" + [[host]] [ + ":" + [[port]] ]
+    * unless [[port]] is the default port of the Uri's [[scheme]], in which case ":" + [[port]] is omitted.
+    *
+    * @return
+    */
   def schemeHostPort: String = s"$scheme://$hostPort"
 
+  /** [[scheme]] + "://" + [[host]] [ + ":" + [[port]] ] + [[path]]
+    * unless [[port]] is the default port of the Uri's [[scheme]], in which case ":" + [[port]] is omitted.
+    *
+    * @return
+    */
   def schemeHostPortPath: String = s"$schemeHostPort$path"
 
-  def pathQueryFragment: String = ???
+  /** [[path]] [ + "?" + [[query]] ] [ + "#" + [[fragment]] ]
+    *
+    * @return
+    */
+  def pathQueryFragment: String = {
 
-  def queryFragment: String = ???
+    // TODO: All the string render accessors should have individual StringBuilder ones so they can be combined consistently
+    // and efficiently
+    val result = new StringBuilder()
+    result.append(path)
+    query.foreach { q =>
+      result.append('?')
+      result.append(q)
+    }
+    fragment.foreach { f =>
+      result.append('#')
+      result.append(Uri.encodeFragment(f))
+    }
+    result.toString
+  }
 
+  /** [ + "?" + [[query]] ] [ + "#" + [[fragment]] ]
+    *
+    * @return
+    */
+  def queryFragment: String = {
+    val result = new StringBuilder()
+    query.foreach { q =>
+      result.append('?')
+      result.append(q)
+    }
+    fragment.foreach { f =>
+      result.append('#')
+      result.append(Uri.encodeFragment(f))
+    }
+    result.toString
+  }
+
+  /** [ [[userInfo]] +] [[host]] [ + ":" + [[port]] ]
+    * User and password are presented the same as in [[userInfo]], i.e. unencoded.
+    *
+    * @return
+    */
   def authority: String = userInfo match {
     case None => hostPort
     case Some(info) => s"$info@$hostPort"
   }
 
+  /** [[user + ":" + [[password]] ]
+    * where either user or password can be [[None]] and are represented as empty string. However if both are [[None]],
+    * the result of this accessor is also [[None]].
+    *
+    * @return
+    */
   def userInfo: Option[String] = user match {
     case None => password match {
       case None => None
@@ -287,6 +402,10 @@ case class Uri(scheme: String, host: String = "", port: Int = -1, user: Option[S
     }
   }
 
+  /** Uri path.
+    *
+    * @return
+    */
   def path: String = {
     val builder = new StringBuilder()
     segments.foreach { segment =>
@@ -297,11 +416,260 @@ case class Uri(scheme: String, host: String = "", port: Int = -1, user: Option[S
     builder.toString()
   }
 
+  /** Query string without the leading '?'.
+    *
+    * @return
+    */
   def query: Option[String] = params.map(Uri.renderParams)
+  
+  /** Create a new Uri based on the current instance with an additional query parameter.
+    *
+    * @param key   Query key.
+    * @param value Query value. Value must exist.
+    *              Use [[withParam(String)]] or [[withParam(String,Option[String])]] for value-less parameter.
+    * @return New uri.
+    */
+  def withParam(key: String, value: String): Uri = withParams(List(key -> Some(value)))
 
-  // Not overriding toString, because it hides the case class string serialization
+  /** Create a new Uri based on the current instance with an additional query parameter.
+    *
+    * @param key   Query key.
+    * @param value Query value.
+    * @return New uri.
+    */
+  def withParam(key: String, value: Option[String]): Uri = withParams(List(key -> value))
+
+  /** Create a new Uri based on the current instance with an additional query parameter without a value.
+    *
+    * @param key Query key.
+    * @return New uri.
+    */
+  def withParam(key: String): Uri = withParams(List(key -> None))
+
+  /** Create a new Uri based on the current instance with additional query parameters.
+    *
+    * @param params List of query key/value pairs.
+    * @return New uri.
+    */
+  def withParams(params: List[(String, Option[String])]): Uri = (params, this.params) match {
+    case (null, _) => this
+    case (p1, None) => copy(params = Some(p1))
+    case (p1, Some(p0)) => copy(params = Some(p0 ::: p1))
+  }
+
+  /** Create new Uri based on the current instance with parameters from another uri added.
+    *
+    * @param uri Other Uri.
+    * @return New uri.
+    */
+  def withParamsFrom(uri: Uri): Uri = uri.params match {
+    case None => this
+    case Some(p) => withParams(p)
+  }
+
+  /** Create a new Uri based on the current instance with the provided querystring added.
+    *
+    * @param query Query string.
+    * @return New uri.
+    */
+  def withQuery(query: String): Uri = withParams(Uri.parseParamsAsPairs(query))
+
+  /** Create a copy of the current Uri with the Query removed.
+    *
+    * @return New uri.
+    */
+  def withoutQuery(): Uri = copy(params = None)
+
+  /** Create a copy of the current Uri with the Query parameters removed.
+    *
+    * <p><b>Note:</b> same as [[withoutQuery()]].
+    *
+    * @return New uri.
+    */
+  def withoutParams(): Uri = withoutQuery()
+
+  /** Create a copy of the current Uri with all occurences of a specific query parameter removed.
+    *
+    * @param key Query parameter key.
+    * @return New uri.
+    */
+  def withoutParams(key: String): Uri = copy(params = params.map(_.filter(_._1 != key)))
+
+  /** Create a new Uri based on the current instance with the given credentials.
+    *
+    * @param user     User.
+    * @param password Password.
+    * @return New uri.
+    */
+  def withCredentials(user: Option[String], password: Option[String]): Uri = copy(user = user, password = password)
+
+  /** Create a new Uri based on the current instance with the credentials of another uri.
+    *
+    * @param uri Input uri.
+    * @return New uri.
+    */
+  def withCredentialsFrom(uri: Uri): Uri = copy(user = uri.user, password = uri.password)
+
+  /** Create a copy of the current Uri with credentials removed.
+    *
+    * <p><b>Note:</b> Same as .withCredentials(None,None)
+    *
+    * @return New uri.
+    */
+  def withoutCredentials(): Uri = copy(user = None, password = None)
+
+  /** Create a new Uri based on the current instance with the given fragment.
+    *
+    * @param fragment Fragment. Use [[withFragment(String, Option[String])]] or [[withoutFragment()]] to remove fragment.
+    * @return New uri.
+    */
+  def withFragment(fragment: String): Uri = copy(fragment = Some(fragment))
+
+  /** Create a new Uri based on the current instance with the given fragment.
+    *
+    * @param fragment Fragment.
+    * @return New uri.
+    */
+  def withFragment(fragment: Option[String]): Uri = copy(fragment = fragment)
+
+  /** Create a copy of the current Uri with the fragment removed.
+    *
+    * @return New uri.
+    */
+  def withoutFragment(): Uri = copy(fragment = None)
+
+  /** Create a new Uri based on the current instance with only a subset of the original path.
+    *
+    * @param count Number of segments to keep. If count is larger than number of segments, Uri remains
+    *              unchanged. If count is 0, the path is removed.
+    *              <p>Throws [[IllegalArgumentException]] on negative count
+    * @return New uri.
+    */
+  def withFirstSegments(count: Int): Uri = count match {
+    case c if c < 0 => throw new IllegalArgumentException(s"count cannot be negative")
+    case c if c >= segments.length => this
+    case c if c == 0 => withoutPath()
+    case c => copy(segments = segments.take(c))
+  }
+
+  /** Create a new Uri based on the current instance with only a subset of the original path.
+    *
+    * @param count Number of segments to drop. If count is larger than number of segments, the path is removed.
+    *              If count is 0, the Uri remains unchanged.
+    *              <p>Throws [[IllegalArgumentException]] on negative count
+    * @return New uri.
+    */
+  def withoutFirstSegments(count: Int): Uri = count match {
+    case c if c < 0 => throw new IllegalArgumentException(s"count cannot be negative")
+    case c if c == 0 || 0 == segments.length => this
+    case c if c >= segments.length => withoutPath()
+    case c => copy(segments = segments.takeRight(segments.length - c))
+  }
+
+  /** Create a copy of the current Uri with the last segment removed.
+    *
+    * @return New uri.
+    */
+  def withoutLastSegment(): Uri = withoutLastSegments(1)
+
+  /** Create a new Uri based on the current instance with only a subset of the original path.
+    *
+    * @param count Number of segments to remove from end of path. If count is larger than number of segments, the
+    *              path is removed. If count is 0, the Uri remains unchanged.
+    *              <p>Throws [[IllegalArgumentException]] on negative count
+    * @return New uri.
+    */
+  def withoutLastSegments(count: Int): Uri = count match {
+    case c if c < 0 => throw new IllegalArgumentException(s"count cannot be negative")
+    case _ => withFirstSegments(Math.max(0, segments.length - count))
+  }
+
+  /** Create a new Uri with the current [[path]] removed.
+    *
+    * @return New uri.
+    */
+  def withoutPath(): Uri = copy(segments = Nil)
+
+  /** Create a copy of the current Uri with the [[path]], [[query]] and [[fragment]] removed.
+    *
+    * @return New uri.
+    */
+  def withoutPathQueryFragment(): Uri = copy(segments = Nil, params = None, fragment = None)
+
+  /** Create a copy of the current Uri with the [[userInfo]], [[path]], [[query]] and [[fragment]] removed.
+    *
+    * @return New uri.
+    */
+  def withoutCredentialsPathQueryFragment(): Uri = copy(
+    user = None,
+    password = None,
+    segments = Nil,
+    params = None,
+    fragment = None)
+
+  /** Create a new Uri based on the current instance with a trailing slash.
+    *
+    * @return New uri.
+    */
+  def withTrailingSlash(): Uri = copy(trailingSlash = true)
+
+  /** Create a copy of the current Uri with the trailing slash removed.
+    *
+    * @return New uri.
+    */
+  def withoutTrailingSlash(): Uri = copy(trailingSlash = false)
+
+  /** Create a new Uri based on the current instance with a different scheme.
+    *
+    * @param scheme New scheme.
+    * @return New uri.
+    */
+  def withScheme(scheme: String): Uri = if (Uri.Internals.isValidScheme(scheme)) {
+    val port = if (usesDefaultPort) {
+      UriSchemeDefaultPort.getSchemePort(scheme)
+    } else {
+      this.port
+    }
+    copy(scheme = scheme, port = port)
+  } else {
+    throw new IllegalArgumentException(s"invalid scheme: $scheme")
+  }
+
+  /** Create a new Uri based on the current instance with a different host.
+    *
+    * @param host New host.
+    * @return New uri.
+    */
+  def withHost(host: String): Uri = if (Uri.Internals.isValidHost(host)) {
+    copy(host = host)
+  } else {
+    throw new IllegalArgumentException(s"invalid host: $scheme")
+  }
+
+  /** Create a new Uri based on the current instance with a different port.
+    *
+    * @param port New port.
+    * @return New uri.
+    */
+  def withPort(port: Int): Uri = if (port < 0 || port > UriParser.MAX_PORT) {
+    throw new IllegalArgumentException(s"invalid port: $port")
+  } else {
+    UriParser.determinePort(copy(port = port))
+  }
+
+  /** Render the Uri as standard string representation.
+    *
+    * @return
+    */
+  // Note: Not overriding toString for this, because it hides the case class string serialization
   def toUriString: String = toUriString(true)
 
+  /** Render the Uri as standard string representation.
+    *
+    * @param includePassword If false, any occurence of [[password]] is replaced with 'xxx'. Useful when writing Uris
+    *                        to logs.
+    * @return
+    */
   def toUriString(includePassword: Boolean = true) = {
     val result = new StringBuilder()
     result.append(scheme)
