@@ -491,7 +491,7 @@ case class Uri(scheme: String, host: String = "", port: Int = -1, user: Option[S
     * @param pathQueryFragment Path/query/fragment string.
     * @return New uri instance.
     */
-  def atAbsolutePath(pathQueryFragment: String): Uri = withoutPathQueryFragment().atPath(path)
+  def atAbsolutePath(pathQueryFragment: String): Uri = withoutPathQueryFragment().atPath(pathQueryFragment)
 
   /** Create a new Uri based on the current instance with an additional query parameter.
     *

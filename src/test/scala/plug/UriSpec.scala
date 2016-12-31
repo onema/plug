@@ -108,19 +108,19 @@ class UriSpec extends FlatSpec with Matchers {
     uri.fragment should equal(Some("baz"))
   }
 
-  "atAbsolutePath" should "replace path & fragment, but append query" in {
+  "atAbsolutePath" should "replace path, query & fragment" in {
     val uri = basePathUri.withFragment("foo").withParam("a", "b").atAbsolutePath("x/y?c=d#baz")
     uri.segments should equal(List("x", "y"))
-    uri.params should equal(Some(List("a" -> Some("b"), "c" -> Some("d"))))
+    uri.params should equal(Some(List("c" -> Some("d"))))
     uri.fragment should equal(Some("baz"))
   }
 
   it should "ignore leading '/'" in {
-    basePathUri.atAbsolutePath("/x/y").segments should equal(List("a", "b", "c", "x", "y"))
+    basePathUri.atAbsolutePath("/x/y").segments should equal(List("x", "y"))
   }
 
   it should "respect trailing '/'" in {
-    val uri = basePathUri.atPath("x/y/")
+    val uri = basePathUri.atAbsolutePath("x/y/")
     uri.segments should equal(List("x", "y"))
     uri.trailingSlash shouldBe true
   }
