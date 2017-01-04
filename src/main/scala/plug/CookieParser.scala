@@ -73,7 +73,7 @@ object CookieParser {
 
   object Internals {
     def parseCookie(text: String, index: Int, acc: List[Cookie]): List[Cookie] = if (index + 1 >= text.length) {
-      acc
+      acc.reverse
     } else parseNameValue(text, index, useCommaAsSeparator = true) match {
       case (None, index1) => parseCookie(text, index1, acc)
       case (Some((cookieName, cookieValue)), index1) =>
@@ -89,6 +89,7 @@ object CookieParser {
             case (Some(nameValuePair), idx1) => nameValuePair match {
               case ("$Path", v) => parse(idx1, domain, Some(v))
               case ("$Domain", v) => parse(idx1, Some(v), path)
+              case _ => (buildUri(path, domain), index)
             }
           }
 
@@ -172,7 +173,9 @@ object CookieParser {
     //  }
 
     def parseNameValue(text: String, index: Int, useCommaAsSeparator: Boolean): (Option[(String, String)], Int) = {
+
       def findEquals(index: Int): (Boolean, Int) = if (text(index) == '=') (true, index + 1) else (false, index)
+
       parseWord(text, skipWhitespace(text, index)) match {
         case (None, index2) => (None, index2)
         case (Some(name), index2) =>
@@ -188,7 +191,7 @@ object CookieParser {
           }
 
           if (matchedEquals) {
-            parseValue(text, index, useCommaAsSeparator) match {
+            parseValue(text, index3, useCommaAsSeparator) match {
               case (None, index4) => (None, index4)
               case (Some((value, false)), index4) if useCommaAsSeparator && index4 < text.length && text(index4) == ',' =>
 
@@ -208,8 +211,9 @@ object CookieParser {
                 } else {
                   (value, index4)
                 }
-                (Some((name, value1)), index5)
-              case (Some((value, _)), index4) => (Some((name, value)), index4)
+                consumeTail(value1, index5)
+                //(Some((name, value1)), index5)
+              case (Some((value, _)), index4) => consumeTail(value,index4)//(Some((name, value)), index4)
             }
           } else {
             consumeTail(null, index3) // null value? what does that mean?
@@ -335,7 +339,7 @@ object CookieParser {
 
     def unescapeString(text: String): String = {
       val result = new StringBuilder(text.length)
-      def unescape(i: Int): Unit = {
+      def unescape(i: Int): Unit = if (i < text.length) {
         val c = text(i)
         if (c == '\\' && i + 1 < text.length) {
           text(i + 1) match {

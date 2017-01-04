@@ -61,8 +61,8 @@ class CookieParserSpec extends FlatSpec with Matchers {
   it should "parse bad cookie names 2" in {
     val cookies = CookieParser.parseCookieHeader("  foo=\"bar\"; lithiumLogin:successfactors=~2acHBr09HxytcqIXV~eVqhSr8s74VfDTjhQ8XU615EaYeGn-7OdDSN70BshVnsYG71yPbJvKPoZzHl05KP; authtoken=\"1234\"  ")
     assertCookies(cookies,
-      C("foo", "bar"), // No path... need to deal with this in C
-      C("[index.php]scayt_verLang", "5"), // check original test what the name actually parses as
+      C("foo", "bar"),
+      C("lithiumLogin:successfactors", "~2acHBr09HxytcqIXV~eVqhSr8s74VfDTjhQ8XU615EaYeGn-7OdDSN70BshVnsYG71yPbJvKPoZzHl05KP"), // check original test what the name actually parses as
       C("authtoken", "1234")
     )
   }
@@ -289,7 +289,7 @@ class CookieParserSpec extends FlatSpec with Matchers {
   }
 
   def assertSingleCookie(cookies: List[Cookie], test: C) = {
-    withClue("Wrong number of cookies parsed:") {
+    withClue(s"Wrong number of cookies parsed: $cookies:") {
       cookies.length should equal(1)
     }
     assertCookie(cookies.head, test)
