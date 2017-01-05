@@ -1,7 +1,7 @@
 package plug
 
 import org.joda.time.DateTime
-
+import StringExtensions.StringEscape
 /**
   * Created by arne on 12/31/16.
   */
@@ -25,51 +25,17 @@ object CookieParser {
     }
   }
 
-  //    List<DreamCookie> result = new List<DreamCookie>();
-  //    if(string.IsNullOrEmpty(header)) {
-  //      return result;
-  //    }
-  //    int index = 0;
-  //    string name;
-  //    string value;
-  //    if(!ParseNameValue(out name, out value, header, ref index, false)) {
-  //      return result;
-  //    }
-  //
-  //    // check if we read the cookie version information
-  //    if(string.Compare(name, "$Version", true) != 0) {
-  //
-  //      // we read something else; let's forget that we read it
-  //      index = 0;
-  //    }
-  //    while(index < header.Length - 1) {
-  //      DreamCookie cookie = ParseCookie(header, ref index);
-  //      if(cookie != null) {
-  //        result.Add(cookie);
-  //      }
-  //    }
-  //    return result;
-  //  }
-
   /**
     * Parse a collection cookies from a set cookie header.
     *
     * @param setCookieHeader Http set cookie header.
     * @return Collection of cookies.
     */
-  def parseSetCookieHeader(setCookieHeader: String): List[Cookie] = ???
-
-  //    List<DreamCookie> result = new List<DreamCookie>();
-  //    if(string.IsNullOrEmpty(setCookieHeader)) {
-  //      return result;
-  //    }
-  //    int index = 0;
-  //    DreamCookie cookie;
-  //    while((cookie = ParseSetCookie(setCookieHeader, ref index)) != null) {
-  //      result.Add(cookie);
-  //    }
-  //    return result;
-  //  }
+  def parseSetCookieHeader(setCookieHeader: String): List[Cookie] = setCookieHeader match {
+    case null => Nil
+    case x if x.isEmpty => Nil
+    case _ => Internals.parseSetCookie(setCookieHeader, 0, Nil)
+  }
 
   object Internals {
     def parseCookie(text: String, index: Int, acc: List[Cookie]): List[Cookie] = if (index + 1 >= text.length) {
@@ -85,11 +51,11 @@ object CookieParser {
 
         def parse(index: Int, domain: Option[String], path: Option[String]): (Option[Uri], Int) =
           parseNameValue(text, index, useCommaAsSeparator = true) match {
-            case (None, idx1) => (buildUri(path, domain), idx1)
+            case (None, idx1) => (buildUri(domain, path), idx1)
             case (Some(nameValuePair), idx1) => nameValuePair match {
               case ("$Path", v) => parse(idx1, domain, Some(v))
               case ("$Domain", v) => parse(idx1, Some(v), path)
-              case _ => (buildUri(path, domain), index)
+              case _ => (buildUri(domain, path), index)
             }
           }
 
@@ -97,7 +63,7 @@ object CookieParser {
         parseCookie(text, skipComma(text, index2), Cookie(cookieName, cookieValue, uri) :: acc)
     }
 
-    def parseSetCookie(text: String, index: Int): Option[(Cookie, Int)] = ???
+    def parseSetCookie(text: String, index: Int, acc: List[Cookie]): List[Cookie] = ???
 
     //    string cookieName;
     //    string cookieValue;
@@ -198,8 +164,9 @@ object CookieParser {
                 def indexOfEqualOrSemiColon(): Int = {
                   (text.indexOf('=', index4), text.indexOf(';', index4)) match {
                     case (-1, -1) => -1
-                    case (a, b) if a > b => a
-                    case (_, b) => b
+                    case (-1, b) => b
+                    case (a, -1) => a
+                    case (a,b) => math.min(a,b)
                   }
                 }
 
@@ -212,11 +179,10 @@ object CookieParser {
                   (value, index4)
                 }
                 consumeTail(value1, index5)
-                //(Some((name, value1)), index5)
               case (Some((value, _)), index4) => consumeTail(value,index4)//(Some((name, value)), index4)
             }
           } else {
-            consumeTail(null, index3) // null value? what does that mean?
+            consumeTail(null, index3) // TODO: null value? do we need to make .value an Option?
           }
       }
     }
@@ -262,9 +228,9 @@ object CookieParser {
         val wordStart = index + 1
         val last = scanQuotedWord(wordStart)
         if (last == text.length) {
-          (Some(unescapeString(text.substring(wordStart))), last)
+          (Some(text.substring(wordStart).unescapeString), last)
         } else {
-          (Some(unescapeString(text.substring(wordStart, last))), last + 1)
+          (Some(text.substring(wordStart, last).unescapeString), last + 1)
         }
       } else {
         // parse an alphanumeric token
@@ -311,9 +277,9 @@ object CookieParser {
         val wordStart = index + 1
         val last = scanQuotedWord(wordStart)
         if (last == text.length) {
-          (Some((unescapeString(text.substring(wordStart)), true)), last)
+          (Some((text.substring(wordStart).unescapeString, true)), last)
         } else {
-          (Some((unescapeString(text.substring(wordStart, last)), true)), last + 1)
+          (Some((text.substring(wordStart, last).unescapeString, true)), last + 1)
         }
       } else {
         // parse an alphanumeric token
@@ -337,48 +303,6 @@ object CookieParser {
       ((c >= 'a') && (c <= 'z')) ||
       ((c > 32) && (c < 127) && (c != ',') && (c != ';') && (c != '='))
 
-    def unescapeString(text: String): String = {
-      val result = new StringBuilder(text.length)
-      def unescape(i: Int): Unit = if (i < text.length) {
-        val c = text(i)
-        if (c == '\\' && i + 1 < text.length) {
-          text(i + 1) match {
-            case 'a' =>
-              result.append('\u0001') // \a
-              unescape(i + 2)
-            case 'b' =>
-              result.append('\b')
-              unescape(i + 2)
-            case 'f' =>
-              result.append('\f')
-              unescape(i + 2)
-            case 'n' =>
-              result.append('\n')
-              unescape(i + 2)
-            case 'r' =>
-              result.append('\r')
-              unescape(i + 2)
-            case 't' =>
-              result.append('\t')
-              unescape(i + 2)
-            case 'u' =>
-              result.append(Integer.parseInt(text.substring(i + 1, 4), 16))
-              unescape(i + 6)
-            case 'v' =>
-              result.append('\u0016') // \v
-              unescape(i + 2)
-            case x =>
-              result.append(x)
-              unescape(i + 2)
-          }
-        } else {
-          result.append(c)
-          unescape(i + 1)
-        }
-      }
-      unescape(0)
-      result.toString()
-    }
   }
 
 }

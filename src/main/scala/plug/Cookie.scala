@@ -1,7 +1,7 @@
 package plug
 
 import org.joda.time.DateTime
-
+import StringExtensions.StringEscape
 object Cookie {
 
   /**
@@ -185,7 +185,7 @@ class Cookie private(val name: String,
   }
 
   override def toString(): String = {
-    val location = uri.map(x => s"@${x.hostPort}/${x.path}").getOrElse("")
+    val location = uri.map(x => s"@${x.hostPort}${x.path}").getOrElse("")
     s"Cookie($name$location=$value)"
   }
 
@@ -241,7 +241,20 @@ class Cookie private(val name: String,
     *
     * @return Http cookie header string.
     */
-  def toCookieHeader(): String = ???
+  def toCookieHeader: String = {
+    val result = new StringBuilder()
+    result.append(s"""$name="${value.escapeString}"""")
+    path match {
+      case None =>
+      case Some(p) => result.append(s"""; $$Path="$p"""")
+    }
+    domain match {
+      case None =>
+      case Some("") =>
+      case Some(d) => result.append(s"""; $$Domain="$d"""")
+    }
+    result.toString()
+  }
 
   //
   //    // Note (arnec): We always translate cookies to the public form before serializing
@@ -262,7 +275,7 @@ class Cookie private(val name: String,
     *
     * @return Http set-cookie header string.
     */
-  def toSetCookieHeader(): String = ???
+  def toSetCookieHeader: String = ???
 
   //
   //    // Note (arnec): We always translate cookies to the public form before serializing
