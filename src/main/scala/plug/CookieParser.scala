@@ -1,7 +1,13 @@
 package plug
 
-import org.joda.time.DateTime
+
+import java.util.Locale
+
+import org.joda.time.{DateTime, DateTimeZone}
 import StringExtensions.StringEscape
+import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
+
+import scala.util.{Failure, Success, Try}
 /**
   * Created by arne on 12/31/16.
   */
@@ -63,80 +69,81 @@ object CookieParser {
         parseCookie(text, skipComma(text, index2), Cookie(cookieName, cookieValue, uri) :: acc)
     }
 
-    def parseSetCookie(text: String, index: Int, acc: List[Cookie]): List[Cookie] = ???
+    case class SetCookieParts(domain: Option[String] = None,
+                              path: Option[String] = None,
+                              expires: Option[DateTime] = None,
+                              version: Option[Int] = None,
+                              comment: Option[String] = None,
+                              commentUri: Option[Uri] = None,
+                              discard: Boolean = false,
+                              secure: Boolean = false,
+                              httpOnly: Boolean = false) {
+      def uri: Option[Uri] = (domain, path) match {
+        case (None, None) => None
+        case (d, p) =>
+          val d2 = d.map { x => if(x(0) == '.') x.substring(1) else x } // stripping . from .example.net
+          Uri.fromString(s"http://${d2.getOrElse("")}${p.getOrElse("")}")
+      }
+    }
 
-    //    string cookieName;
-    //    string cookieValue;
-    //    DateTime expires = DateTime.MaxValue;
-    //    int version = 1;
-    //    string domain = string.Empty;
-    //    string path = string.Empty;
-    //    string comment = string.Empty;
-    //    XUri commentUri = null;
-    //    bool discard = false;
-    //    bool secure = false;
-    //    bool httpOnly = false;
-    //    if(!ParseNameValue(out cookieName, out cookieValue, text, ref index, true)) {
-    //      return null;
-    //    }
-    //
-    //    string name;
-    //    string value;
-    //    while(ParseNameValue(out name, out value, text, ref index, true)) {
-    //      if(StringUtil.EqualsInvariantIgnoreCase(name, "comment")) {
-    //        comment = value;
-    //      } else if(StringUtil.EqualsInvariantIgnoreCase(name, "commenturl")) {
-    //        commentUri = new XUri(value);
-    //      } else if(StringUtil.EqualsInvariantIgnoreCase(name, "domain")) {
-    //        domain = value;
-    //      } else if(StringUtil.EqualsInvariantIgnoreCase(name, "path")) {
-    //        path = value;
-    //      } else if(StringUtil.EqualsInvariantIgnoreCase(name, "max-age")) {
-    //        expires = GlobalClock.UtcNow.AddSeconds(int.Parse(value, NumberFormatInfo.InvariantInfo));
-    //      } else if(StringUtil.EqualsInvariantIgnoreCase(name, "expires")) {
-    //        expires = ParseCookieDateTimeString(value);
-    //      } else if(StringUtil.EqualsInvariantIgnoreCase(name, "port")) {
-    //
-    //        // TODO (steveb): why is this commented out?
-    //        // result.Port = value;
-    //      } else if(StringUtil.EqualsInvariantIgnoreCase(name, "version")) {
-    //        version = int.Parse(value, NumberFormatInfo.InvariantInfo);
-    //      } else if(StringUtil.EqualsInvariantIgnoreCase(name, "discard")) {
-    //        discard = true;
-    //      } else if(StringUtil.EqualsInvariantIgnoreCase(name, "secure")) {
-    //        secure = true;
-    //      } else if(StringUtil.EqualsInvariantIgnoreCase(name, "httponly")) {
-    //        httpOnly = true;
-    //      } else {
-    //
-    //        // unrecognized attribute; let's skip it
-    //      }
-    //    }
-    //    SkipComma(text, ref index);
-    //
-    //    // TODO (steveb): why are we doing this?
-    //    XUri uri = null;
-    //    if((domain != null) || (path != null)) {
-    //      if((domain != null) && domain.StartsWith(".")) {
-    //
-    //        // TODO (steveb): why are we modifying the original domain value?
-    //        domain = domain.Remove(0, 1);
-    //      }
-    //
-    //      // TODO (steveb): the produced URI always uses 'http' even when the cookie is secure, why?
-    //      uri = new XUri(string.Format("http://{0}{1}", domain, path));
-    //    }
-    //    return new DreamCookie(cookieName, cookieValue, uri, expires, version, secure, discard, comment, commentUri, httpOnly, false);
-    //  }
+    def parseSetCookie(text: String, index: Int, acc: List[Cookie]): List[Cookie] = if(index+1 >= text.length) {
+      acc.reverse
+    } else parseNameValue(text, index,useCommaAsSeparator = true) match {
+      case(None, index1) => acc.reverse // unlike parseCookie parseSetCookie drops out on first missed match
+      case (Some((cookieName, cookieValue)), index1) =>
 
-    def parseCookieDateTimeString(cookieExpires: String): Option[DateTime] = ???
+        def parse(index: Int, parts: SetCookieParts): (SetCookieParts, Int) =
+          parseNameValue(text, index, useCommaAsSeparator = true) match {
+            case (None, idx1) => (parts, idx1)
+            case (Some(nameValuePair), idx1) => nameValuePair match {
+              case ("path", v) => parse(idx1, parts.copy(path = Some(v)))
+              case ("domain", v) => parse(idx1, parts.copy(domain = Some(v)))
+              case ("comment", v) => parse(idx1, parts.copy(comment = Some(v)))
+              case ("commenturl", v) => parse(idx1, parts.copy(commentUri = Uri.fromString(v)))
+              case ("max-age", v) =>  Try(Integer.parseInt(v)) match {
+                case Success(i) =>
+                  val expires = new DateTime(DateTimeZone.UTC).plusSeconds(i)
+                  parse(idx1, parts.copy(expires = Some(expires)))
+                case _ => parse(idx1, parts) // ignoring integer parse failure
+              }
+              case ("expires", v) => parse(idx1, parts.copy(expires = parseCookieDateTimeString(v)))
+              case ("version", v) => Try(Integer.parseInt(v)) match {
+                  case Success(i) => parse(idx1, parts.copy(version = Some(i)))
+                  case _ => parse(idx1, parts) // ignoring integer parse failure
+                }
+              case ("discard", v) => parse(idx1, parts.copy(discard = true))
+              case ("secure", v) => parse(idx1, parts.copy(secure = true))
+              case ("httponly", v) => parse(idx1, parts.copy(httpOnly = true))
+              case _ => parse(idx1, parts) // unrecognized, skipping
+            }
+          }
 
-    //    DateTime ret;
-    //    if(!DateTimeUtil.TryParseExactInvariant(cookieExpires, "ddd, dd-MMM-yyyy HH:mm:ss 'GMT'", out ret)) {
-    //      ret = DateTime.MaxValue;
-    //    }
-    //    return ret;
-    //  }
+        val (parts, index2) = parse(index1, SetCookieParts())
+        val cookie = Cookie(
+          cookieName,
+          cookieValue,
+          uri = parts.uri,
+          expires = parts.expires,
+          secure = parts.secure,
+          comment = parts.comment,
+          commentUri = parts.commentUri,
+          version = parts.version,
+          discard = parts.discard,
+          httpOnly = parts.httpOnly,
+          setCookie = true
+        )
+        parseSetCookie(text, skipComma(text, index2), cookie :: acc)
+    }
+
+    def parseCookieDateTimeString(cookieExpires: String): Option[DateTime] = {
+      val formatter = DateTimeFormat.forPattern("EEE, dd-MMM-yyyy HH:mm:ss 'GMT'").withZoneUTC()//.withLocale(Locale.US)
+      Try(DateTime.parse(cookieExpires, formatter)) match {
+        case Success(dt) => Some(dt)
+        case Failure(e) =>
+          println(e)
+          None
+      }
+    }
 
     def parseNameValue(text: String, index: Int, useCommaAsSeparator: Boolean): (Option[(String, String)], Int) = {
 

@@ -1,5 +1,6 @@
 package plug
 
+import org.joda.time.{DateTime, DateTimeZone}
 import org.scalatest.{FlatSpec, Matchers}
 
 class CookieParserSpec extends FlatSpec with Matchers {
@@ -235,6 +236,12 @@ class CookieParserSpec extends FlatSpec with Matchers {
   //    Assert.AreEqual("example.net", cookies[0].Domain);
   //    Assert.AreEqual(true, cookies[0].HttpOnly);
   //  }
+
+  "parseCookieDateTimeString" should "parse dates in pattern " in {
+    val dt = CookieParser.Internals.parseCookieDateTimeString("Fri, 31-Dec-2010 23:59:59 GMT")
+    dt.map(_.toString) should equal(Some(new DateTime(2010,12,31,23,59,59,DateTimeZone.forID("GMT")).toString))
+    //dt should equal(Some()))
+  }
 
   object C {
     def apply(name: String, value: String, path: String): C = C(name, value, Some(path))

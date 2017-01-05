@@ -69,7 +69,10 @@ object Cookie {
     * @param secure     true if the cookie should only be used on https requests.
     * @param comment    Comment.
     * @param commentUri Uri for comment.
+    * @param version    Cookie version (if omitted set to 0 for regular and 1 for set cookies).
+    * @param discard    true if the cookie is to be discarded.
     * @param httpOnly   true if cookie is only accessible to the http transport, i.e. not client side scripts.
+    * @param setCookie  true is this is a set cookie (sets version to 1).
     * @return New cookie instance.
     */
   def apply(name: String,
@@ -79,13 +82,15 @@ object Cookie {
             secure: Boolean = false,
             comment: Option[String] = None,
             commentUri: Option[Uri] = None,
+            version: Option[Int] = None,
+            discard: Boolean = false,
             httpOnly: Boolean = false,
             setCookie: Boolean = true): Cookie = {
     new Cookie(name,
       value,
       uri.map(_.withoutCredentials().withoutQuery().withoutFragment()),
       expires,
-      version = if (setCookie) 1 else 0,
+      version = version.getOrElse(if (setCookie) 1 else 0),
       secure = secure,
       comment = comment,
       commentUri = commentUri,
