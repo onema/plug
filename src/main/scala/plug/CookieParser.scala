@@ -8,6 +8,7 @@ import StringExtensions.StringEscape
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
 import scala.util.{Failure, Success, Try}
+
 /**
   * Created by arne on 12/31/16.
   */
@@ -81,26 +82,26 @@ object CookieParser {
       def uri: Option[Uri] = (domain, path) match {
         case (None, None) => None
         case (d, p) =>
-          val d2 = d.map { x => if(x(0) == '.') x.substring(1) else x } // stripping . from .example.net
+          val d2 = d.map { x => if (x(0) == '.') x.substring(1) else x } // stripping . from .example.net
           Uri.fromString(s"http://${d2.getOrElse("")}${p.getOrElse("")}")
       }
     }
 
-    def parseSetCookie(text: String, index: Int, acc: List[Cookie]): List[Cookie] = if(index+1 >= text.length) {
+    def parseSetCookie(text: String, index: Int, acc: List[Cookie]): List[Cookie] = if (index + 1 >= text.length) {
       acc.reverse
-    } else parseNameValue(text, index,useCommaAsSeparator = true) match {
-      case(None, index1) => acc.reverse // unlike parseCookie parseSetCookie drops out on first missed match
+    } else parseNameValue(text, index, useCommaAsSeparator = true) match {
+      case (None, index1) => acc.reverse // unlike parseCookie parseSetCookie drops out on first missed match
       case (Some((cookieName, cookieValue)), index1) =>
 
         def parse(index: Int, parts: SetCookieParts): (SetCookieParts, Int) =
           parseNameValue(text, index, useCommaAsSeparator = true) match {
             case (None, idx1) => (parts, idx1)
-            case (Some(nameValuePair), idx1) => nameValuePair match {
+            case (Some(nameValuePair), idx1) => nameValuePair.copy(_1 = nameValuePair._1.toLowerCase) match {
               case ("path", v) => parse(idx1, parts.copy(path = Some(v)))
               case ("domain", v) => parse(idx1, parts.copy(domain = Some(v)))
               case ("comment", v) => parse(idx1, parts.copy(comment = Some(v)))
               case ("commenturl", v) => parse(idx1, parts.copy(commentUri = Uri.fromString(v)))
-              case ("max-age", v) =>  Try(Integer.parseInt(v)) match {
+              case ("max-age", v) => Try(Integer.parseInt(v)) match {
                 case Success(i) =>
                   val expires = new DateTime(DateTimeZone.UTC).plusSeconds(i)
                   parse(idx1, parts.copy(expires = Some(expires)))
@@ -108,9 +109,9 @@ object CookieParser {
               }
               case ("expires", v) => parse(idx1, parts.copy(expires = parseCookieDateTimeString(v)))
               case ("version", v) => Try(Integer.parseInt(v)) match {
-                  case Success(i) => parse(idx1, parts.copy(version = Some(i)))
-                  case _ => parse(idx1, parts) // ignoring integer parse failure
-                }
+                case Success(i) => parse(idx1, parts.copy(version = Some(i)))
+                case _ => parse(idx1, parts) // ignoring integer parse failure
+              }
               case ("discard", v) => parse(idx1, parts.copy(discard = true))
               case ("secure", v) => parse(idx1, parts.copy(secure = true))
               case ("httponly", v) => parse(idx1, parts.copy(httpOnly = true))
@@ -136,7 +137,7 @@ object CookieParser {
     }
 
     def parseCookieDateTimeString(cookieExpires: String): Option[DateTime] = {
-      val formatter = DateTimeFormat.forPattern("EEE, dd-MMM-yyyy HH:mm:ss 'GMT'").withZoneUTC()//.withLocale(Locale.US)
+      val formatter = DateTimeFormat.forPattern("EEE, dd-MMM-yyyy HH:mm:ss 'GMT'").withZoneUTC()
       Try(DateTime.parse(cookieExpires, formatter)) match {
         case Success(dt) => Some(dt)
         case Failure(e) =>
@@ -147,7 +148,10 @@ object CookieParser {
 
     def parseNameValue(text: String, index: Int, useCommaAsSeparator: Boolean): (Option[(String, String)], Int) = {
 
-      def findEquals(index: Int): (Boolean, Int) = if (text(index) == '=') (true, index + 1) else (false, index)
+      def findEquals(index: Int): (Boolean, Int) =
+        if (index >= text.length) (false, index)
+        else if (text(index) == '=') (true, index + 1)
+        else (false, index)
 
       parseWord(text, skipWhitespace(text, index)) match {
         case (None, index2) => (None, index2)
@@ -173,7 +177,7 @@ object CookieParser {
                     case (-1, -1) => -1
                     case (-1, b) => b
                     case (a, -1) => a
-                    case (a,b) => math.min(a,b)
+                    case (a, b) => math.min(a, b)
                   }
                 }
 
@@ -186,7 +190,7 @@ object CookieParser {
                   (value, index4)
                 }
                 consumeTail(value1, index5)
-              case (Some((value, _)), index4) => consumeTail(value,index4)//(Some((name, value)), index4)
+              case (Some((value, _)), index4) => consumeTail(value, index4)
             }
           } else {
             consumeTail(null, index3) // TODO: null value? do we need to make .value an Option?

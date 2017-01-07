@@ -207,6 +207,7 @@ object Uri {
     val schemeRegex = """[a-zA-Z][\w\+\-\.]*""".r
     val hostRegex = """((\[[a-fA-F\d:\.]*\])|([\w\-\._~%!\$&'\(\)\*\+,;=]*))""".r
     val segmentRegex = """^/*[\w\-\._~%!\$&'\(\)\*\+,;=:@\^\|\[\]{}]*$""".r
+    val ipRegex = """^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$""".r
 
     def isValidScheme(scheme: String) = schemeRegex.findFirstIn(scheme).nonEmpty
 
@@ -215,6 +216,8 @@ object Uri {
     def isValidSegment(segment: String) = segmentRegex.findFirstMatchIn(segment).nonEmpty
 
     def intToHexByte(n: Int): Byte = Integer.toHexString(n)(0).toUpper.asInstanceOf[Byte]
+
+    def isIp(host: String) = ipRegex.findFirstIn(host).nonEmpty
 
     def encode(text: String, level: UriEncoding, byteEncoder: (Byte, UriEncoding) => List[Byte]) = {
       if (text == null || text.isEmpty) {
@@ -425,6 +428,12 @@ case class Uri(scheme: String, host: String = "", port: Int = -1, user: Option[S
     */
   def query: Option[String] = params.map(Uri.renderParams)
 
+  /** true if [[host]] is an IP address */
+  lazy val hostIsIp = Uri.Internals.isIp(host)
+
+  /** true if [[path]] is either "http" or "https" */
+  lazy val isHttpOrHttps =  List("http", "https").filter(_.equalsIgnoreCase(scheme))
+
   /** Create a new Uri at a appended path.
     *
     * <p>An empty trailing segment indicates a trailing slash for the resulting Uri.
@@ -436,22 +445,24 @@ case class Uri(scheme: String, host: String = "", port: Int = -1, user: Option[S
     * @param segments Path segments.
     * @return New uri instance.
     */
-  def at(segments: String*): Uri = if (segments.isEmpty) this
-  else {
-    def checkSegments(segments: List[String], acc: List[String]): (List[String], Boolean) = segments match {
-      case h :: Nil if h == null || h.isEmpty => (acc.reverse, true)
-      case h :: Nil => ((h :: acc).reverse, false)
-      case h :: tail if h == null =>
-        throw new NullPointerException("A segment was null")
-      case h :: tail if h == null || h.isEmpty =>
-        throw new IllegalArgumentException("A non-trailing segment was empty")
-      case h :: tail if !Uri.Internals.isValidSegment(h) =>
-        throw new IllegalArgumentException(s"Segment '$h' containts invalid characters")
-      case h :: tail => checkSegments(tail, h :: acc)
+  def at(segments: String*): Uri =
+    if (segments.isEmpty) this
+    else {
+      def checkSegments(segments: List[String], acc: List[String]): (List[String], Boolean) = segments match {
+        case h :: Nil if h == null || h.isEmpty => (acc.reverse, true)
+        case h :: Nil => ((h :: acc).reverse, false)
+        case h :: tail if h == null =>
+          throw new NullPointerException("A segment was null")
+        case h :: tail if h == null || h.isEmpty =>
+          throw new IllegalArgumentException("A non-trailing segment was empty")
+        case h :: tail if !Uri.Internals.isValidSegment(h) =>
+          throw new IllegalArgumentException(s"Segment '$h' containts invalid characters")
+        case h :: tail => checkSegments(tail, h :: acc)
+      }
+
+      val (newSegments, trailingSlash) = checkSegments(segments.toList, this.segments.reverse)
+      copy(segments = newSegments, trailingSlash = trailingSlash)
     }
-    val (newSegments, trailingSlash) = checkSegments(segments.toList, this.segments.reverse)
-    copy(segments = newSegments, trailingSlash = trailingSlash)
-  }
 
   /** Create a new Uri with appended path/query/fragment.
     *

@@ -2,7 +2,7 @@ package plug
 
 import org.scalatest._
 
-class UriParsertryParseSpec extends FlatSpec with Matchers {
+class UriParserTryParseSpec extends FlatSpec with Matchers {
 
   ///--- Constants ---
 
@@ -118,6 +118,11 @@ class UriParsertryParseSpec extends FlatSpec with Matchers {
   it should "parse IPv6 as hostname" in assertParse(
     "http://[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]",
     Some(Uri(scheme = "http", host = "[2001:0db8:85a3:08d3:1319:8a2e:0370:7344]", port = 80))
+  )
+
+  it should "parse domain with leading dot" in assertParse(
+    "http://.example.com",
+    Some(Uri(scheme = "http", host = ".example.com", port = 80))
   )
 
   it should "fail to parse partial IPv6 address" in assertParse("http://[2001:0db8:85a3", None)

@@ -1,8 +1,13 @@
 package plug
 
-import org.joda.time.DateTime
-import StringExtensions.StringEscape
+import org.joda.time.format.DateTimeFormat
+import org.joda.time.{DateTime, DateTimeZone}
+import plug.StringExtensions.StringEscape
+
 object Cookie {
+
+  // TODO: Really should break this into Cookie and SetCookie, at the very least at the object level
+  // TODO: Reconsider using Uri to represent Domain and Path internally
 
   /**
     * Gets the matching cookie with the longest path from a collection of cookies.
@@ -11,24 +16,17 @@ object Cookie {
     * @param name    Cookie name.
     * @return Matching cookie with longest path, or None if no cookies matched.
     */
-  def getCookie(cookies: List[Cookie], name: String): Option[Cookie] = ???
+  def getCookie(cookies: List[Cookie], name: String): Option[Cookie] = cookies.foldLeft[(Option[Cookie], Int)]((None, -1)) {
+    case ((result, maxPathLength), cookie) =>
 
-  //
-  //    // TODO (steveb): consider making this an extension method
-  //
-  //    // TODO (arnec): Should also match on domain/path as sanity check
-  //    DreamCookie result = null;
-  //    int maxPathLength = -1;
-  //    foreach(DreamCookie cookie in cookies) {
-  //      int length = cookie.Path == null ? 0 : cookie.Path.Length;
-  //      if((cookie.Name != name) || (length <= maxPathLength)) {
-  //        continue;
-  //      }
-  //      maxPathLength = length;
-  //      result = cookie;
-  //    }
-  //    return result;
-  //  }
+      // TODO (arnec): Should also match on domain/path as sanity check
+      val length = cookie.path.map(_.length).getOrElse(0)
+      if (cookie.name != name || length <= maxPathLength) {
+        (result, maxPathLength)
+      } else {
+        (Some(cookie), length)
+      }
+  }._1
 
   /**
     * Render a collection of cookies into a cookie header.
@@ -36,28 +34,16 @@ object Cookie {
     * @param cookies Collection of cookies.
     * @return Http cookie header.
     */
-  def renderCookieHeader(cookies: List[Cookie]): String = ???
-
-  //    if((cookies == null) || (cookies.Count == 0)) {
-  //      return string.Empty;
-  //    }
-  //    StringBuilder result = new StringBuilder();
-  //    result.AppendFormat("$Version=\"{0}\"", 1);
-  //    bool first = true;
-  //    foreach(DreamCookie cookie in cookies) {
-  //
-  //      // NOTE (steveb): Dream 1.5 and earlier REQUIRES the $Version value to be separated by a semi-colon (;) instead of a comma (,)
-  //
-  //      if(first) {
-  //        first = false;
-  //        result.Append("; ");
-  //      } else {
-  //        result.Append(", ");
-  //      }
-  //      result.Append(cookie.ToCookieHeader());
-  //    }
-  //    return result.ToString();
-  //  }
+  def renderCookieHeader(cookies: List[Cookie]): String = if (cookies.isEmpty) ""
+  else {
+    val result = new StringBuilder()
+    result.append("""$Version="1"""")
+    cookies.foreach { cookie =>
+      result.append(", ")
+      result.append(cookie.toCookieHeader)
+    }
+    result.toString()
+  }
 
   /**
     * Create a new set cookie.
@@ -77,7 +63,7 @@ object Cookie {
     */
   def apply(name: String,
             value: String,
-            uri: Option[Uri],
+            uri: Option[Uri] = None,
             expires: Option[DateTime] = None,
             secure: Boolean = false,
             comment: Option[String] = None,
@@ -88,8 +74,8 @@ object Cookie {
             setCookie: Boolean = true): Cookie = {
     new Cookie(name,
       value,
-      uri.map(_.withoutCredentials().withoutQuery().withoutFragment()),
-      expires,
+      uri.map(_.withoutCredentials().withoutQuery().withoutFragment().withPort(80).withScheme("http")),
+      validateExpire(expires),
       version = version.getOrElse(if (setCookie) 1 else 0),
       secure = secure,
       comment = comment,
@@ -98,45 +84,22 @@ object Cookie {
     )
   }
 
-  //, bool secure, string comment, XUri commentUri, bool httpOnly) {
-  //    return new DreamCookie(name, value, uri, expires, 1, secure, false, comment, commentUri, httpOnly, false);
-  //  }
-  //    _name = name;
-  //    _value = value;
-  //    if(uri != null) {
-  //      _uri = uri.WithoutQuery().WithoutCredentials().WithoutFragment().AsLocalUri();
-  //      if(!skipContextDiscovery) {
-  //        DreamContext dc = DreamContext.CurrentOrNull;
-  //        if(dc != null) {
-  //          _publicUri = dc.PublicUri;
-  //          _localMachineUri = dc.Env.LocalMachineUri;
-  //        }
-  //      }
-  //    }
-  //
-  //    // auto-convert very old expiration dates to max since they are most likely bogus
-  //    if(expires.Year < 2000) {
-  //      expires = DateTime.MaxValue;
-  //    }
-  //    if(expires != DateTime.MaxValue) {
-  //      expires = expires.ToUniversalTime();
-  //
-  //      // need to trim milliseconds of the passed in date
-  //      expires = new DateTime(expires.Year, expires.Month, expires.Day, expires.Hour, expires.Minute, expires.Second, 0, DateTimeKind.Utc).ToUniversalTime();
+  private def validateExpire(expires: Option[DateTime]) = expires.flatMap { e =>
+    // very old dates are treated as bogus and converted to None
+    if (e.year().get < 2000) None
+    // while every other date needs to be set to UTC and milliseconds trimmed off
+    else Some(e.toDateTime(DateTimeZone.UTC).withMillisOfSecond(0))
+  }
 
-
-  /// <returns></returns>
   /**
     * Format [[DateTime]] in standard cookie format.
     *
     * @param date Date.
     * @return Cookie datetime string.
     */
-  def formatCookieDateTimeString(date: DateTime): String = ???
-
-  //    return date.ToSafeUniversalTime().ToString("ddd, dd-MMM-yyyy HH:mm:ss 'GMT'", CultureInfo.InvariantCulture.DateTimeFormat);
-  //  }
-
+  def formatCookieDateTimeString(date: DateTime): String =
+  // TODO: This seems wrong, since GMT and UTC are not identical. Is that an error in the spec or this code?
+    date.toDateTime(DateTimeZone.UTC).toString(DateTimeFormat.forPattern("EEE, dd-MMM-yyyy HH:mm:ss 'GMT'"))
 }
 
 /**
@@ -189,35 +152,44 @@ class Cookie private(val name: String,
     case _ => false
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     val location = uri.map(x => s"@${x.hostPort}${x.path}").getOrElse("")
     s"Cookie($name$location=$value)"
   }
 
+  private def copy(name: String = name,
+                   value: String = value,
+                   uri: Option[Uri] = uri,
+                   expires: Option[DateTime] = expires,
+                   version: Int = version,
+                   secure: Boolean = secure,
+                   discard: Boolean = discard,
+                   comment: Option[String] = comment,
+                   commentUri: Option[Uri] = commentUri,
+                   httpOnly: Boolean = httpOnly) =
+    new Cookie(name, value, uri, expires, version, secure, discard, comment, commentUri, httpOnly)
+
   /**
-    * Create new cookie based on current instance with host/port.
+    * Create new cookie based on current instance with domain.
     *
-    * @param hostPort Host/port to use for new instance.
+    * @param domain Domain to use for new instance.
     * @return New cookie.
     */
-  def withHostPort(hostPort: String): Cookie = ??? // Should be with Domain?
-  //    string scheme = _uri == null ? "local" : _uri.Scheme;
-  //    string path = _uri == null ? string.Empty : _uri.Path;
-  //    return new DreamCookie(Name, Value, new XUri(string.Format("{0}://{1}{2}", scheme, hostPort, path)), Expires, Version, Secure, Discard, Comment, CommentUri, HttpOnly, false);
-  //  }
+  def withDomain(domain: String): Cookie = copy(uri = uri match {
+    case None => Uri.fromString(s"http://$domain") // Note: this silently fails to None if the domain is not legal
+    case Some(u) => Some(u.withHost(domain))
+  })
 
   /**
     * Create new cookie based on current instance with path.
     *
-    * @param path Path to use for new instance.
+    * @param path Path to use for new instance. The path must start with '/'
     * @return New Cookie.
     */
-  def withPath(path: String): Cookie = ???
-
-  //    string scheme = _uri == null ? "local" : _uri.Scheme;
-  //    string hostPort = _uri == null ? string.Empty : _uri.Path;
-  //    return new DreamCookie(Name, Value, new XUri(string.Format("{0}://{1}{2}", scheme, hostPort, path)), Expires, Version, Secure, Discard, Comment, CommentUri, HttpOnly, false);
-  //  }
+  def withPath(path: String): Cookie = copy(uri = uri match {
+    case None => Uri.fromString(s"http://$path")
+    case Some(u) => Some(u.atAbsolutePath(path))
+  })
 
   /**
     * Create new cookie based on current instance with expiration.
@@ -225,10 +197,7 @@ class Cookie private(val name: String,
     * @param expires Cookie expiration.
     * @return New Cookie.
     */
-  def withExpiration(expires: DateTime): Cookie = ???
-
-  //    return new DreamCookie(Name, Value, Uri, expires, Version, Secure, Discard, Comment, CommentUri, HttpOnly, false);
-  //  }
+  def withExpiration(expires: DateTime): Cookie = copy(expires = Cookie.validateExpire(Some(expires)))
 
   /**
     * Create new cookie based on current instance with discard flag.
@@ -236,10 +205,7 @@ class Cookie private(val name: String,
     * @param discard true if the cookie should be discarded.
     * @return New Cookie.
     */
-  def withDiscard(discard: Boolean): Cookie = ???
-
-  //    return new DreamCookie(Name, Value, Uri, Expires, Version, Secure, discard, Comment, CommentUri, HttpOnly, false);
-  //  }
+  def withDiscard(discard: Boolean): Cookie = copy(discard = discard)
 
   /**
     * Create an Http cookie header from the current instance.
@@ -249,83 +215,32 @@ class Cookie private(val name: String,
   def toCookieHeader: String = {
     val result = new StringBuilder()
     result.append(s"""$name="${value.escapeString}"""")
-    path match {
-      case None =>
-      case Some(p) => result.append(s"""; $$Path="$p"""")
-    }
-    domain match {
-      case None =>
-      case Some("") =>
-      case Some(d) => result.append(s"""; $$Domain="$d"""")
-    }
+    path.foreach(x => result.append(s"""; $$Path="$x""""))
+    domain.filter(!_.isEmpty).foreach(x => result.append(s"""; $$Domain="$x""""))
     result.toString()
   }
-
-  //
-  //    // Note (arnec): We always translate cookies to the public form before serializing
-  //    XUri uri = GetPublicUri();
-  //    StringBuilder result = new StringBuilder();
-  //    result.AppendFormat("{0}=\"{1}\"", Name, Value.EscapeString());
-  //    if(!string.IsNullOrEmpty(Path)) {
-  //      result.AppendFormat("; $Path=\"{0}\"", uri.Path);
-  //    }
-  //    if(!string.IsNullOrEmpty(Domain)) {
-  //      result.AppendFormat("; $Domain=\"{0}\"", uri.HostPort);
-  //    }
-  //    return result.ToString();
-  //  }
 
   /**
     * Create an Http set-cookie header from the current instance.
     *
     * @return Http set-cookie header string.
     */
-  def toSetCookieHeader: String = ???
-
-  //
-  //    // Note (arnec): We always translate cookies to the public form before serializing
-  //    XUri uri = GetPublicUri();
-  //    StringBuilder result = new StringBuilder(1024);
-  //    result.AppendFormat("{0}=\"{1}\"", Name, Value.EscapeString());
-  //    if(!string.IsNullOrEmpty(Comment)) {
-  //      result.Append("; Comment=\"" + Comment.EscapeString() + "\"");
-  //    }
-  //    if(CommentUri != null) {
-  //      result.Append("; CommentURL=\"" + CommentUri.ToString().EscapeString() + "\"");
-  //    }
-  //    if(Discard) {
-  //      result.Append(result + "; Discard");
-  //    }
-  //
-  //    // Note (arnec): domain names require a dot prefix (so that a cookie can't be set to .com)
-  //    //               while hostnames (including localhost) should force Domain to be omitted
-  //    //               so that the receiver can appropriately set it
-  //    if(!string.IsNullOrEmpty(Domain) && Domain.Contains(".") && !Domain.StartsWith(".")) {
-  //      string domain = uri.HostIsIp ? uri.Host : "." + uri.Host;
-  //      result.AppendFormat("; Domain={0}", domain);
-  //    }
-  //    if(Expires < DateTime.MaxValue) {
-  //      result.Append("; Expires=" + FormatCookieDateTimeString(Expires));
-  //    }
-  //
-  //    // NOTE (arnec): Do not remove, but re-evaluate, since port is a problem with the standard.
-  //    //if(!string.IsNullOrEmpty(Port)) {
-  //    //    result.Append("; Port=\"" + Port + "\"");
-  //    //}
-  //    if(Version > 1) {
-  //      result.Append("; Version=\"" + Version.ToString(NumberFormatInfo.InvariantInfo) + "\"");
-  //    } else if(Version > 0) {
-  //      result.Append("; Version=" + Version.ToString(NumberFormatInfo.InvariantInfo));
-  //    }
-  //    if(!string.IsNullOrEmpty(Path)) {
-  //      result.Append("; Path=" + uri.Path);
-  //    }
-  //    if(Secure) {
-  //      result.Append("; Secure");
-  //    }
-  //    if(HttpOnly) {
-  //      result.Append("; HttpOnly");
-  //    }
-  //    return result.ToString();
-  //  }
+  def toSetCookieHeader: String = {
+    val result = new StringBuilder()
+    result.append(s"""$name="${value.escapeString}"""")
+    comment.foreach(x => result.append(s"""; Comment=${x.escapeString}""""))
+    commentUri.foreach(x => result.append(s"""; Comment=${x.toUriString.escapeString}""""))
+    if(discard) result.append("; Discard")
+    path.foreach(x => result.append(s"""; $$Path="$x""""))
+    uri.filter(x => ! x.host.isEmpty && x.host.contains('.') && !x.host.startsWith(".")).foreach { u =>
+      val d = if(u.hostIsIp) u.host else s".${u.host}"
+      result.append(s"""; $$Domain="$d"""")
+    }
+    expires.map(Cookie.formatCookieDateTimeString).foreach(x => result.append(s"""; Expires=$x"""))
+    if(version > 1 ) { result.append(s"""; Version="$version"""")}
+    else if(version > 0){ result.append(s"""; Version=$version""")}
+    if(secure){ result.append("; Secure")}
+    if(httpOnly){ result.append("; HttpOnly")}
+    result.toString()
+  }
 }

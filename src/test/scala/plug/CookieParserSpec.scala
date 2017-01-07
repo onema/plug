@@ -190,57 +190,37 @@ class CookieParserSpec extends FlatSpec with Matchers {
     )
   }
 
-  //    [Test]
-  //  public void Parse_SetCookie() {
-  //    List<DreamCookie> result = DreamCookie.ParseSetCookieHeader("Customer=\"WILE_E_COYOTE\"; Version=\"1\"; Path=\"/acme\", Part_Number=\"Rocket_Launcher_0001\"; Version=\"1\"; Path=\"/acme\"");
-  //    Assert.AreEqual(2, result.Count);
-  //    Assert.AreEqual("Customer", result[0].Name);
-  //    Assert.AreEqual("WILE_E_COYOTE", result[0].Value);
-  //    Assert.AreEqual(1, result[0].Version);
-  //    Assert.AreEqual("/acme", result[0].Path);
-  //    Assert.AreEqual(false, result[0].HttpOnly);
-  //    Assert.AreEqual("Part_Number", result[1].Name);
-  //    Assert.AreEqual("Rocket_Launcher_0001", result[1].Value);
-  //    Assert.AreEqual(1, result[1].Version);
-  //    Assert.AreEqual("/acme", result[1].Path);
-  //    Assert.AreEqual(false, result[1].HttpOnly);
-  //  }
-  //
-  //    [Test]
-  //  public void Parse_SetCookie_with_HttpOnly() {
-  //    List<DreamCookie> result = DreamCookie.ParseSetCookieHeader("Customer=\"WILE_E_COYOTE\"; Version=\"1\"; Path=\"/acme\"; HttpOnly, Part_Number=\"Rocket_Launcher_0001\"; Version=\"1\"; Path=\"/acme\"; HttpOnly");
-  //    Assert.AreEqual(2, result.Count);
-  //    Assert.AreEqual("Customer", result[0].Name);
-  //    Assert.AreEqual("WILE_E_COYOTE", result[0].Value);
-  //    Assert.AreEqual(1, result[0].Version);
-  //    Assert.AreEqual(true, result[0].HttpOnly);
-  //    Assert.AreEqual("/acme", result[0].Path);
-  //    Assert.AreEqual("Part_Number", result[1].Name);
-  //    Assert.AreEqual("Rocket_Launcher_0001", result[1].Value);
-  //    Assert.AreEqual(1, result[1].Version);
-  //    Assert.AreEqual("/acme", result[1].Path);
-  //    Assert.AreEqual(true, result[1].HttpOnly);
-  //  }
-  //
-  //    [Test]
-  //  public void Parse_cookie_sample_from_wikipedia() {
-  //    List<DreamCookie> cookies = DreamCookie.ParseSetCookieHeader("RMID=732423sdfs73242; expires=Fri, 31-Dec-2010 23:59:59 GMT; path=/; domain=.example.net; HttpOnly");
-  //    Assert.AreEqual(1, cookies.Count);
-  //    Assert.AreEqual("RMID", cookies[0].Name);
-  //    Assert.AreEqual("732423sdfs73242", cookies[0].Value);
-  //    DateTime expires = DateTimeUtil.ParseExactInvariant("Fri, 31-Dec-2010 23:59:59 GMT", "ddd, dd-MMM-yyyy HH:mm:ss 'GMT'");
-  //    Assert.AreEqual(expires, cookies[0].Expires);
-  //    Assert.AreEqual("/", cookies[0].Path);
-  //
-  //    // TODO (steveb): it seems wrong that we check for 'example.net' instead of '.example.net'
-  //    Assert.AreEqual("example.net", cookies[0].Domain);
-  //    Assert.AreEqual(true, cookies[0].HttpOnly);
-  //  }
+  "parseSetCookieHeader" should "parse set cookies" in {
+    val cookies = CookieParser.parseSetCookieHeader("Customer=\"WILE_E_COYOTE\"; Version=\"1\"; Path=\"/acme\", Part_Number=\"Rocket_Launcher_0001\"; Version=\"1\"; Path=\"/acme\"")
+    assertSetCookies(cookies,
+      CS("Customer","WILE_E_COYOTE",uri=Some("http:///acme"),version=1),
+      CS("Part_Number","Rocket_Launcher_0001",uri=Some("http:///acme"),version=1)
+    )
+  }
+
+  it should "parse set cookies with httpOnly" in {
+    val cookies = CookieParser.parseSetCookieHeader("Customer=\"WILE_E_COYOTE\"; Version=\"1\"; Path=\"/acme\"; HttpOnly, Part_Number=\"Rocket_Launcher_0001\"; Version=\"1\"; Path=\"/acme\"; HttpOnly")
+    assertSetCookies(cookies,
+      CS("Customer","WILE_E_COYOTE",uri=Some("http:///acme"),version=1,httpOnly = true),
+      CS("Part_Number","Rocket_Launcher_0001",uri=Some("http:///acme"),version=1, httpOnly = true)
+    )
+  }
+
+  it should "parse a sample set cookie from wikipedia" in {
+    val cookies = CookieParser.parseSetCookieHeader("RMID=732423sdfs73242; expires=Fri, 31-Dec-2010 23:59:59 GMT; path=/; domain=.example.net; HttpOnly")
+    assertSetCookies(cookies,
+      CS("RMID","732423sdfs73242",
+        uri=Some("http://example.net/"),
+        expires =Some(new DateTime(2010, 12, 31, 23, 59, 59, DateTimeZone.UTC)),
+        version=1,
+        httpOnly = true)
+    )
+  }
 
   "parseCookieDateTimeString" should "parse dates in pattern " in {
-    val dt = CookieParser.Internals.parseCookieDateTimeString("Fri, 31-Dec-2010 23:59:59 GMT")
-    dt.map(_.toString) should equal(Some(new DateTime(2010,12,31,23,59,59,DateTimeZone.forID("GMT")).toString))
-    //dt should equal(Some()))
+    val expected = Some(new DateTime(2010, 12, 31, 23, 59, 59, DateTimeZone.UTC))
+    val actual = CookieParser.Internals.parseCookieDateTimeString("Fri, 31-Dec-2010 23:59:59 GMT")
+    actual should equal(expected)
   }
 
   object C {
@@ -251,6 +231,17 @@ class CookieParserSpec extends FlatSpec with Matchers {
 
   case class C(name: String, value: String, path: Option[String] = None)
 
+  case class CS(name: String, value: String,
+                uri: Option[String] = None,
+                expires: Option[DateTime] = None,
+                version: Int = 0,
+                comment: Option[String] = None,
+                commentUri: Option[String] = None,
+                discard: Boolean = false,
+                secure: Boolean = false,
+                httpOnly: Boolean = false
+               )
+
   def assertName(cookie: Cookie, name: String) = withClue("Bad Cookie Name:") {
     cookie.name should equal(name)
   }
@@ -259,14 +250,41 @@ class CookieParserSpec extends FlatSpec with Matchers {
     cookie.value should equal(value)
   }
 
-  def assertPath(cookie: Cookie, path: Option[String]) = withClue("Bad Cookie Path:") {
-    cookie.path should equal(path)
-  }
-
   def assertCookie(cookie: Cookie, test: C) = {
     assertName(cookie, test.name)
     assertValue(cookie, test.value)
-    assertPath(cookie, test.path)
+    withClue("Bad Cookie Path:") {
+      cookie.path should equal(test.path)
+    }
+  }
+
+  def assertSetCookie(cookie: Cookie, test: CS) = {
+    assertName(cookie, test.name)
+    assertValue(cookie, test.value)
+    withClue("Bad Uri:") {
+      cookie.uri.map(_.toUriString) should equal(test.uri)
+    }
+    withClue("Bad expires:") {
+      cookie.expires should equal(test.expires)
+    }
+    withClue("Bad version:") {
+      cookie.version should equal(test.version)
+    }
+    withClue("Bad comment:") {
+      cookie.comment should equal(test.comment)
+    }
+    withClue("Bad commentUri:") {
+      cookie.commentUri.map(_.toUriString) should equal(test.commentUri)
+    }
+    withClue("Bad discard:") {
+      cookie.discard should equal(test.discard)
+    }
+    withClue("Bad secure:") {
+      cookie.secure should equal(test.secure)
+    }
+    withClue("Bad httpOnly:") {
+      cookie.httpOnly should equal(test.httpOnly)
+    }
   }
 
   def assertCookies(cookies: List[Cookie], testCookies: C*) = {
@@ -275,12 +293,28 @@ class CookieParserSpec extends FlatSpec with Matchers {
         .zipAll(testCookies.map(x => x.name), "MISSING", "MISSING")
         .zipWithIndex
         .foldLeft(s"Expected ${testCookies.length} cookies, got ${cookies.length}\n") {
-          case (acc, ((a, b),i)) => acc + f"[$i%2d] $a%30s | $b%30s%n"
+          case (acc, ((a, b), i)) => acc + f"[$i%2d] $a%30s | $b%30s%n"
         }
       fail(failure)
     } else cookies.zip(testCookies).zipWithIndex.foreach {
-      case ((cookie, test), idx) => withClue(s"Cookie $idx:") {
+      case ((cookie, test), idx) => withClue(s"Cookie '${cookie.name}' [$idx]:") {
         assertCookie(cookie, test)
+      }
+    }
+  }
+
+  def assertSetCookies(cookies: List[Cookie], testCookies: CS*) = {
+    if (cookies.length != testCookies.length) {
+      val failure = cookies.map(x => x.name)
+        .zipAll(testCookies.map(x => x.name), "MISSING", "MISSING")
+        .zipWithIndex
+        .foldLeft(s"Expected ${testCookies.length} cookies, got ${cookies.length}\n") {
+          case (acc, ((a, b), i)) => acc + f"[$i%2d] $a%30s | $b%30s%n"
+        }
+      fail(failure)
+    } else cookies.zip(testCookies).zipWithIndex.foreach {
+      case ((cookie, test), idx) => withClue(s"Cookie '${cookie.name}' [$idx]:") {
+        assertSetCookie(cookie, test)
       }
     }
   }
