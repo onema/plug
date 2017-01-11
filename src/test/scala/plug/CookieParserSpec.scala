@@ -46,7 +46,7 @@ class CookieParserSpec extends FlatSpec with Matchers {
   }
 
   it should "roundtrip header created with Cookie.renderCookieHeader" in {
-    val cookie = Cookie("Customer", "WILE_E_COYOTE", Uri.fromString("http://localhost/acme"), setCookie = false)
+    val cookie = Cookie("Customer", "WILE_E_COYOTE", path = Some("/acme"), setCookie = false)
     print(cookie.toCookieHeader)
     val cookies = CookieParser.parseCookieHeader(cookie.toCookieHeader)
     assertSingleCookie(cookies, C("Customer", "WILE_E_COYOTE", "/acme"))
@@ -232,6 +232,8 @@ class CookieParserSpec extends FlatSpec with Matchers {
   case class C(name: String, value: String, path: Option[String] = None)
 
   case class CS(name: String, value: String,
+                domain: Option[String] = None,
+                path: Option[String] = None,
                 uri: Option[String] = None,
                 expires: Option[DateTime] = None,
                 version: Int = 0,
@@ -261,8 +263,11 @@ class CookieParserSpec extends FlatSpec with Matchers {
   def assertSetCookie(cookie: Cookie, test: CS) = {
     assertName(cookie, test.name)
     assertValue(cookie, test.value)
-    withClue("Bad Uri:") {
-      cookie.uri.map(_.toUriString) should equal(test.uri)
+    withClue("Bad Domain:") {
+      cookie.domain should equal(test.domain)
+    }
+    withClue("Bad Path:") {
+      cookie.path should equal(test.path)
     }
     withClue("Bad expires:") {
       cookie.expires should equal(test.expires)

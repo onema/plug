@@ -20,4 +20,9 @@ class CookieSpec extends FlatSpec with Matchers {
     val actual = Cookie.formatCookieDateTimeString(dt)
     actual should equal("Fri, 31-Dec-2010 23:59:59 GMT")
   }
+
+  "Cookie" should "be expired if expires date is in the past" in {
+    val cookie = Cookie("a", "xyz", expires = Some(DateTime.now().minusDays(1)))
+    cookie.expired shouldBe true
+  }
 }

@@ -7,7 +7,6 @@ import plug.StringExtensions.StringEscape
 object Cookie {
 
   // TODO: Really should break this into Cookie and SetCookie, at the very least at the object level
-  // TODO: Reconsider using Uri to represent Domain and Path internally
 
   /**
     * Gets the matching cookie with the longest path from a collection of cookies.
@@ -50,7 +49,8 @@ object Cookie {
     *
     * @param name       Cookie name.
     * @param value      Cookie value.
-    * @param uri        Cookie Uri.
+    * @param domain     Cookie domain.
+    * @param path       Cookie path.
     * @param expires    Cookie expiration.
     * @param secure     true if the cookie should only be used on https requests.
     * @param comment    Comment.
@@ -63,7 +63,8 @@ object Cookie {
     */
   def apply(name: String,
             value: String,
-            uri: Option[Uri] = None,
+            domain: Option[String] = None,
+            path: Option[String] = None,
             expires: Option[DateTime] = None,
             secure: Boolean = false,
             comment: Option[String] = None,
@@ -74,7 +75,8 @@ object Cookie {
             setCookie: Boolean = true): Cookie = {
     new Cookie(name,
       value,
-      uri.map(_.withoutCredentials().withoutQuery().withoutFragment().withPort(80).withScheme("http")),
+      Internals.toDomainLabels(domain),
+      Internals.toSegments(path),
       validateExpire(expires),
       version = version.getOrElse(if (setCookie) 1 else 0),
       secure = secure,
@@ -100,24 +102,41 @@ object Cookie {
   def formatCookieDateTimeString(date: DateTime): String =
   // TODO: This seems wrong, since GMT and UTC are not identical. Is that an error in the spec or this code?
     date.toDateTime(DateTimeZone.UTC).toString(DateTimeFormat.forPattern("EEE, dd-MMM-yyyy HH:mm:ss 'GMT'"))
+
+  object Internals {
+    def toSegments(path: Option[String]): Option[List[String]] =
+    // TODO: run only the parts of UriParser needed for pathQueryFragment
+      path.flatMap(x => UriParser.tryParse(s"http://$x")).map(_.segments)
+
+
+    def toDomainLabels(domain: Option[String]): List[String] = domain match {
+      case None => Nil
+      case Some(d) if d.isEmpty => Nil
+      // TODO: should validate domain as hostname
+      case Some(d) => d.split(".").toList
+    }
+  }
+
 }
 
 /**
+  * A case class-like representation of an Http Cookie
   *
-  * @param name       Cookie name.
-  * @param value      Cookie value.
-  * @param uri        Cookie Uri.
-  * @param expires    Cookie expiration.
-  * @param version    Cookie version.
-  * @param secure     true if the cookie is used on Https only.
-  * @param discard    true if the cookie is to be discarded.
-  * @param comment    Cookie comment.
-  * @param commentUri Cookie comment uri.
-  * @param httpOnly   true if cookie is only accessible to the http transport, i.e. not client side scripts.
+  * @param name         Cookie name.
+  * @param value        Cookie value.
+  * @param hostLabels Cookie Domain.
+  * @param segments     Cookie path segments. Some(Nil) denotes root path '/'
+  * @param version      Cookie version.
+  * @param secure       true if the cookie is used on Https only.
+  * @param discard      true if the cookie is to be discarded.
+  * @param comment      Cookie comment.
+  * @param commentUri   Cookie comment uri.
+  * @param httpOnly     true if cookie is only accessible to the http transport, i.e. not client side scripts.
   */
 class Cookie private(val name: String,
                      val value: String,
-                     val uri: Option[Uri],
+                     val hostLabels: List[String],
+                     val segments: Option[List[String]],
                      val expires: Option[DateTime] = None,
                      val version: Int = 0,
                      val secure: Boolean = false,
@@ -126,40 +145,45 @@ class Cookie private(val name: String,
                      val commentUri: Option[Uri] = None,
                      val httpOnly: Boolean = false) {
 
-  /** Domain of the cookie. */
-  def domain = uri.map(_.hostPort)
+  /** Cookie Domain. */
+  lazy val domain: Option[String] = hostLabels match {
+    case Nil => None
+    case _ => Some(String.join(".", hostLabels: _*))
+  }
 
   /** Cookie Path. */
-  def path = uri.map(_.path)
+  lazy val path: Option[String] = segments.map("/" + String.join("/", _: _*))
 
   /** true if the cookie is already expired. */
   def expired = expires.exists(_.isBeforeNow)
 
-  /** hashCode based soley on [[name]], [[value]] & [[uri]]. */
-  override def hashCode(): Int = List(name, value, uri)
+  /** hashCode based soley on [[name]], [[value]], [[hostLabels]] & [[segments]]. */
+  override def hashCode(): Int = List(name, value, hostLabels, segments)
     .foldLeft(0) { case (acc, x) => acc * 41 + x.hashCode() }
 
   /**
     * Compare instances for identical contents.
     *
-    * <p>[[Cookie]] instances are considered identical based solely on [[name]], [[value]] & [[uri]].
+    * <p>[[Cookie]] instances are considered identical based solely on [[name]], [[value]], [[hostLabels]] & [[segments]].
     *
     * @param obj Other instance.
     * @return
     */
   override def equals(obj: Any) = obj match {
-    case c: Cookie => name == c.name && value == c.value && uri == c.uri
+    case c: Cookie => name == c.name && value == c.value && hostLabels == c.hostLabels && segments == c.segments
     case _ => false
   }
 
-  override def toString: String = {
-    val location = uri.map(x => s"@${x.hostPort}${x.path}").getOrElse("")
+  override lazy val toString: String = {
+    val uri = s"${domain.getOrElse("")}${path.getOrElse("")}"
+    val location = if (uri.isEmpty) "" else s"@$uri"
     s"Cookie($name$location=$value)"
   }
 
   private def copy(name: String = name,
                    value: String = value,
-                   uri: Option[Uri] = uri,
+                   domainLabels: List[String] = hostLabels,
+                   segments: Option[List[String]] = segments,
                    expires: Option[DateTime] = expires,
                    version: Int = version,
                    secure: Boolean = secure,
@@ -167,7 +191,8 @@ class Cookie private(val name: String,
                    comment: Option[String] = comment,
                    commentUri: Option[Uri] = commentUri,
                    httpOnly: Boolean = httpOnly) =
-    new Cookie(name, value, uri, expires, version, secure, discard, comment, commentUri, httpOnly)
+    new Cookie(name, value, domainLabels, segments, expires, version, secure, discard, comment, commentUri, httpOnly)
+
 
   /**
     * Create new cookie based on current instance with domain.
@@ -175,10 +200,7 @@ class Cookie private(val name: String,
     * @param domain Domain to use for new instance.
     * @return New cookie.
     */
-  def withDomain(domain: String): Cookie = copy(uri = uri match {
-    case None => Uri.fromString(s"http://$domain") // Note: this silently fails to None if the domain is not legal
-    case Some(u) => Some(u.withHost(domain))
-  })
+  def withDomain(domain: Option[String]): Cookie = copy(domainLabels = Cookie.Internals.toDomainLabels(domain))
 
   /**
     * Create new cookie based on current instance with path.
@@ -186,10 +208,16 @@ class Cookie private(val name: String,
     * @param path Path to use for new instance. The path must start with '/'
     * @return New Cookie.
     */
-  def withPath(path: String): Cookie = copy(uri = uri match {
-    case None => Uri.fromString(s"http://$path")
-    case Some(u) => Some(u.atAbsolutePath(path))
-  })
+  def withPath(path: Option[String]): Cookie = copy(segments = Cookie.Internals.toSegments(path))
+
+
+  /**
+    * Create new cookie based on current instance path segments.
+    *
+    * @param segments Path segments to replace current segments (if any) with.
+    * @return
+    */
+  def withSegments(segments: Option[List[String]]): Cookie = copy(segments = segments)
 
   /**
     * Create new cookie based on current instance with expiration.
@@ -212,13 +240,8 @@ class Cookie private(val name: String,
     *
     * @return Http cookie header string.
     */
-  def toCookieHeader: String = {
-    val result = new StringBuilder()
-    result.append(s"""$name="${value.escapeString}"""")
-    path.foreach(x => result.append(s"""; $$Path="$x""""))
-    domain.filter(!_.isEmpty).foreach(x => result.append(s"""; $$Domain="$x""""))
-    result.toString()
-  }
+  def toCookieHeader: String =
+    s"""$name="${value.escapeString}""""
 
   /**
     * Create an Http set-cookie header from the current instance.
@@ -230,17 +253,22 @@ class Cookie private(val name: String,
     result.append(s"""$name="${value.escapeString}"""")
     comment.foreach(x => result.append(s"""; Comment=${x.escapeString}""""))
     commentUri.foreach(x => result.append(s"""; Comment=${x.toUriString.escapeString}""""))
-    if(discard) result.append("; Discard")
-    path.foreach(x => result.append(s"""; $$Path="$x""""))
-    uri.filter(x => ! x.host.isEmpty && x.host.contains('.') && !x.host.startsWith(".")).foreach { u =>
-      val d = if(u.hostIsIp) u.host else s".${u.host}"
-      result.append(s"""; $$Domain="$d"""")
-    }
+    if (discard) result.append("; Discard")
+    path.foreach(x => result.append(s"""; Path="$x""""))
+    domain.foreach(x => result.append(s"""; Domain="$x""""))
     expires.map(Cookie.formatCookieDateTimeString).foreach(x => result.append(s"""; Expires=$x"""))
-    if(version > 1 ) { result.append(s"""; Version="$version"""")}
-    else if(version > 0){ result.append(s"""; Version=$version""")}
-    if(secure){ result.append("; Secure")}
-    if(httpOnly){ result.append("; HttpOnly")}
+    if (version > 1) {
+      result.append(s"""; Version="$version"""")
+    }
+    else if (version > 0) {
+      result.append(s"""; Version=$version""")
+    }
+    if (secure) {
+      result.append("; Secure")
+    }
+    if (httpOnly) {
+      result.append("; HttpOnly")
+    }
     result.toString()
   }
 }

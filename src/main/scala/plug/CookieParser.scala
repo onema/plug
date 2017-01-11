@@ -1,8 +1,6 @@
 package plug
 
 
-import java.util.Locale
-
 import org.joda.time.{DateTime, DateTimeZone}
 import StringExtensions.StringEscape
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
@@ -51,23 +49,19 @@ object CookieParser {
       case (None, index1) => parseCookie(text, index1, acc)
       case (Some((cookieName, cookieValue)), index1) =>
 
-        def buildUri(domainOption: Option[String], pathOption: Option[String]): Option[Uri] = (domainOption, pathOption) match {
-          case (None, None) => None
-          case (domain, path) => Uri.fromString(s"http://${domain.getOrElse("")}${path.getOrElse("")}")
-        }
 
-        def parse(index: Int, domain: Option[String], path: Option[String]): (Option[Uri], Int) =
+        def parse(index: Int, domain: Option[String], path: Option[String]): (Option[String], Option[String], Int) =
           parseNameValue(text, index, useCommaAsSeparator = true) match {
-            case (None, idx1) => (buildUri(domain, path), idx1)
+            case (None, idx1) => (domain, path, idx1)
             case (Some(nameValuePair), idx1) => nameValuePair match {
               case ("$Path", v) => parse(idx1, domain, Some(v))
               case ("$Domain", v) => parse(idx1, Some(v), path)
-              case _ => (buildUri(domain, path), index)
+              case _ => (domain, path, index)
             }
           }
 
-        val (uri, index2) = parse(index1, None, None)
-        parseCookie(text, skipComma(text, index2), Cookie(cookieName, cookieValue, uri) :: acc)
+        val (domain, path, index2) = parse(index1, None, None)
+        parseCookie(text, skipComma(text, index2), Cookie(cookieName, cookieValue, domain, path) :: acc)
     }
 
     case class SetCookieParts(domain: Option[String] = None,
@@ -78,14 +72,7 @@ object CookieParser {
                               commentUri: Option[Uri] = None,
                               discard: Boolean = false,
                               secure: Boolean = false,
-                              httpOnly: Boolean = false) {
-      def uri: Option[Uri] = (domain, path) match {
-        case (None, None) => None
-        case (d, p) =>
-          val d2 = d.map { x => if (x(0) == '.') x.substring(1) else x } // stripping . from .example.net
-          Uri.fromString(s"http://${d2.getOrElse("")}${p.getOrElse("")}")
-      }
-    }
+                              httpOnly: Boolean = false)
 
     def parseSetCookie(text: String, index: Int, acc: List[Cookie]): List[Cookie] = if (index + 1 >= text.length) {
       acc.reverse
@@ -123,7 +110,8 @@ object CookieParser {
         val cookie = Cookie(
           cookieName,
           cookieValue,
-          uri = parts.uri,
+          domain = parts.domain,
+          path = parts.path,
           expires = parts.expires,
           secure = parts.secure,
           comment = parts.comment,

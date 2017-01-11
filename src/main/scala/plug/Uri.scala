@@ -434,6 +434,10 @@ case class Uri(scheme: String, host: String = "", port: Int = -1, user: Option[S
   /** true if [[path]] is either "http" or "https" */
   lazy val isHttpOrHttps =  List("http", "https").filter(_.equalsIgnoreCase(scheme))
 
+  def pathStartsWith(segments: List[String]): Boolean =
+    if(this.segments.length < segments.length) false
+  else segments.zip(this.segments).exists { case (a, b) => a == b }
+
   /** Create a new Uri at a appended path.
     *
     * <p>An empty trailing segment indicates a trailing slash for the resulting Uri.
