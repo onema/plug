@@ -1,0 +1,45 @@
+au
+// 2LDs
+com.au
+net.au
+org.au
+edu.au
+// 3LDs
+act.edu.au
+nsw.edu.au
+nt.edu.au
+qld.edu.au
+
+// com : https://en.wikipedia.org/wiki/.com
+com
+
+// edu : https://en.wikipedia.org/wiki/.edu
+edu
+
+// org : https://en.wikipedia.org/wiki/.org
+org
+
+// pg : https://en.wikipedia.org/wiki/.pg
+*.pg
+
+// xn--l1acc ("mon", Mongolian) : MN
+мон
+
+// xn--mix891f ("Macao", Chinese, Traditional) : MO
+// MONIC / HNET Asia (Registry Operator for .mo)
+澳門
+
+// xn--mix082f ("Macao", Chinese, Simplified) : MO
+澳门
+
+// xn--mgbx4cd0ab ("Malaysia", Malay) : MY
+مليسيا
+
+// apple : 2015-05-14 Apple Inc.
+apple
+
+// aquarelle : 2014-07-24 Aquarelle.com
+aquarelle
+
+// arab : 2015-11-12 League of Arab States
+arab

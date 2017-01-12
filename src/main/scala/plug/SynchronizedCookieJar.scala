@@ -15,19 +15,15 @@ class SynchronizedCookieJar(private var domainTree: DomainTree)(implicit publicS
 
   def toDomainTree = synchronized(this.domainTree)
 
-  def get(uri: Uri): List[Cookie] = ??? //synchronized {
-//    domainTrees.filter(_.)
-//    // Note: this could be made more efficient by only wrapping the retrieval of the domainTree in synchronized
-//    domainTrees.get(uri.host) match {
-//      case None => Nil
-//      case Some(tree) =>
-//        val matches = tree.get(uri.segments)
-//        uri.scheme.equalsIgnoreCase("https") match {
-//          case true => matches // https gets all cookies
-//          case false => matches.filterNot(_.secure) // http only gets cookies not marked secure
-//        }
-//    }
-//  }
+  def getHostnameLabels(uri: Uri): List[String] =
+    if(uri.hostIsIp) List(uri.host)
+    else uri.host.split('.').reverse.toList
+
+
+
+  def get(uri: Uri): List[Cookie] = synchronized {
+    domainTree.get(getHostnameLabels(uri),uri.segments)
+  }
 
   def update(cookie: Cookie, uri: Uri): Unit = ??? //(cookie.hostLabels match {
 //    case Nil =>

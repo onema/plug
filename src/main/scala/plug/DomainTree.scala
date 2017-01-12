@@ -1,7 +1,7 @@
 package plug
 
 object DomainTree {
-  val empty = DomainTree(None,Map.empty)
+  val empty = DomainTree(None, Map.empty)
 }
 
 case class DomainTree(cookies: Option[CookieTree], subTrees: Map[String, DomainTree]) {
@@ -28,5 +28,26 @@ case class DomainTree(cookies: Option[CookieTree], subTrees: Map[String, DomainT
       }
     }
     get(this, labels, Nil)
+  }
+
+  def update(cookie: Cookie, labels: List[String], segments: List[String]): DomainTree = {
+    def update(tree: DomainTree, query: List[String]): DomainTree = query match {
+      case Nil =>
+        // this is the tree for the cookie's domain
+        cookies match {
+          case None => tree // None means we're not allowed to store cookies at this domain
+          case Some(cookieTree) => tree.copy(cookies = Some(cookieTree.update(cookie, segments)))
+        }
+      case head :: tail => tree.subTrees.get(head) match {
+        case None =>
+          // no domain tree for domain
+          if (cookie.expired) tree
+          else tree.copy(subTrees = tree.subTrees + (head -> update(DomainTree.empty, tail)))
+        case Some(subtree) =>
+          tree.copy(subTrees = tree.subTrees + (head -> update(subtree, tail)))
+      }
+    }
+
+    update(this, labels)
   }
 }

@@ -217,6 +217,7 @@ object Uri {
 
     def intToHexByte(n: Int): Byte = Integer.toHexString(n)(0).toUpper.asInstanceOf[Byte]
 
+    // TODO: this should return true for IPv6 as well
     def isIp(host: String) = ipRegex.findFirstIn(host).nonEmpty
 
     def encode(text: String, level: UriEncoding, byteEncoder: (Byte, UriEncoding) => List[Byte]) = {

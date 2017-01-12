@@ -10,29 +10,35 @@ object PublicSuffix {
   object Implicits {
 
     object FromResource {
-      implicit lazy val publicSuffix: PublicSuffix = new ResourcePublicSuffix("/public_suffix_list.dat.gz")
+      implicit lazy val publicSuffix: PublicSuffix = {
+        val resourceStream = getClass.getResourceAsStream("/public_suffix_list.dat.gz")
+        new ResourcePublicSuffix(new GZIPInputStream(new BufferedInputStream(resourceStream)))
+      }
     }
 
+    // TODO: create FromUri that fetches https://publicsuffix.org/list/public_suffix_list.dat and caches locally
   }
+
 }
 
 trait PublicSuffix {
-  def splitOnSuffix(hostname: String): (Option[String],Option[String])
+  def splitOnSuffix(hostnameParts: List[String]): (List[String], List[String])
 }
 
-class ResourcePublicSuffix(resourcePath: String) extends PublicSuffix {
 
-  case class SuffixNode(children: Map[Char,SuffixNode])
+class ResourcePublicSuffix(resourceStream: InputStream) extends PublicSuffix {
+
 
   val suffixes: SuffixNode = {
-    val resourceStream = getClass.getResourceAsStream(resourcePath)
 
-    Source.fromInputStream(new GZIPInputStream(new BufferedInputStream(resourceStream)))
+    Source.fromInputStream(resourceStream)
       .getLines()
       .filterNot(x => x.isEmpty || x.startsWith("//"))
-      .foreach(println)
-    SuffixNode(Map.empty)
+      .foldLeft(SuffixNode(Map.empty)) {
+        case (n, suffix) => n.addSuffix(suffix.split('.').reverse.toList)
+      }
   }
 
-  override def splitOnSuffix(hostname: String): (Option[String], Option[String]) = ???
+  override def splitOnSuffix(hostnameParts: List[String]): (List[String], List[String]) =
+    suffixes.splitOnSuffix(hostnameParts)
 }

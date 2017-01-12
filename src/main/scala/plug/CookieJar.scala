@@ -3,6 +3,8 @@ package plug
 object CookieJar {
 
   object Global {
+
+    // TODO: make this configurable to use the resource or network verion of PublicSuffix
     private lazy val _cookieJar = new SynchronizedCookieJar(DomainTree.empty)(PublicSuffix.Implicits.FromResource.publicSuffix)
 
     implicit def current: CookieJar = synchronized {
