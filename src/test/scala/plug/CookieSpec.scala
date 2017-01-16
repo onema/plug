@@ -25,4 +25,20 @@ class CookieSpec extends FlatSpec with Matchers {
     val cookie = Cookie("a", "xyz", expires = Some(DateTime.now().minusDays(1)))
     cookie.expired shouldBe true
   }
+
+  "Internals.toDomainLabels" should "split domain into parts" in {
+    Cookie.Internals.toDomainLabels(Some("foo.bar.com")) should equal(List("foo", "bar", "com"))
+  }
+
+  it should "not split an IP address" in {
+    Cookie.Internals.toDomainLabels(Some("10.10.1.1")) should equal(List("10.10.1.1"))
+  }
+
+  it should "strip leading dot" in {
+    Cookie.Internals.toDomainLabels(Some(".example.com")) should equal(List("example", "com"))
+  }
+
+  "Internals.toSegments" should "parse '/' into empty list" in {
+    Cookie.Internals.toSegments(Some("/")) should equal(Some(Nil))
+  }
 }

@@ -7,49 +7,49 @@ class CookieParserSpec extends FlatSpec with Matchers {
 
   "parseCookieHeader" should "extract single cookie from header starting with $Version" in {
     val cookies = CookieParser.parseCookieHeader("$Version=\"1\"; Customer=\"WILE_E_COYOTE\"; $Path=\"/acme\"")
-    assertSingleCookie(cookies, C("Customer", "WILE_E_COYOTE", "/acme"))
+    assertSingleCookie(cookies, C("Customer", "WILE_E_COYOTE"))
   }
 
   it should "extract single cookie from header starting with $Version followed by a comma" in {
     val cookies = CookieParser.parseCookieHeader("$Version=\"1\", Customer=\"WILE_E_COYOTE\"; $Path=\"/acme\"")
-    assertSingleCookie(cookies, C("Customer", "WILE_E_COYOTE", "/acme"))
+    assertSingleCookie(cookies, C("Customer", "WILE_E_COYOTE"))
   }
 
   it should "extract single cookie without $Version" in {
     val cookies = CookieParser.parseCookieHeader("Customer=\"WILE_E_COYOTE\"; $Path=\"/acme\"")
-    assertSingleCookie(cookies, C("Customer", "WILE_E_COYOTE", "/acme"))
+    assertSingleCookie(cookies, C("Customer", "WILE_E_COYOTE"))
   }
 
   it should "extract comma separated cookies" in {
     val cookies = CookieParser.parseCookieHeader("$Version=\"1\"; Customer=\"WILE_E_COYOTE\"; $Path=\"/acme\", Part_Number=\"Rocket_Launcher_0001\"; $Path=\"/acme\", Shipping=\"FedEx\"; $Path=\"/acme\"")
     assertCookies(cookies,
-      C("Customer", "WILE_E_COYOTE", "/acme"),
-      C("Part_Number", "Rocket_Launcher_0001", "/acme"),
-      C("Shipping", "FedEx", "/acme")
+      C("Customer", "WILE_E_COYOTE"),
+      C("Part_Number", "Rocket_Launcher_0001"),
+      C("Shipping", "FedEx")
     )
   }
 
   it should "extract comma separated cookies with leading $Version" in {
     val cookies = CookieParser.parseCookieHeader("$Version=\"1\"; Customer=\"WILE_E_COYOTE\"; $Path=\"/acme\", Part_Number=\"Rocket_Launcher_0001\"; $Path=\"/acme\"")
     assertCookies(cookies,
-      C("Customer", "WILE_E_COYOTE", "/acme"),
-      C("Part_Number", "Rocket_Launcher_0001", "/acme")
+      C("Customer", "WILE_E_COYOTE"),
+      C("Part_Number", "Rocket_Launcher_0001")
     )
   }
 
   it should "extrace cookie with unquoted value and quotes in value" in {
     val cookies = CookieParser.parseCookieHeader("Customer=WILE_E_COYOTE; $Path=\"/acme\", Part_Number=\"Rocket \\\"Launcher\\\" 0001\"; $Path=\"/acme\"")
     assertCookies(cookies,
-      C("Customer", "WILE_E_COYOTE", "/acme"),
-      C("Part_Number", "Rocket \"Launcher\" 0001", "/acme")
+      C("Customer", "WILE_E_COYOTE"),
+      C("Part_Number", "Rocket \"Launcher\" 0001")
     )
   }
 
   it should "roundtrip header created with Cookie.renderCookieHeader" in {
-    val cookie = Cookie("Customer", "WILE_E_COYOTE", path = Some("/acme"), setCookie = false)
+    val cookie = Cookie("Customer", "WILE_E_COYOTE", setCookie = false)
     print(cookie.toCookieHeader)
     val cookies = CookieParser.parseCookieHeader(cookie.toCookieHeader)
-    assertSingleCookie(cookies, C("Customer", "WILE_E_COYOTE", "/acme"))
+    assertSingleCookie(cookies, C("Customer", "WILE_E_COYOTE"))
   }
 
   it should "parse all cookies even when one has a bad cookie name" in {
@@ -193,16 +193,16 @@ class CookieParserSpec extends FlatSpec with Matchers {
   "parseSetCookieHeader" should "parse set cookies" in {
     val cookies = CookieParser.parseSetCookieHeader("Customer=\"WILE_E_COYOTE\"; Version=\"1\"; Path=\"/acme\", Part_Number=\"Rocket_Launcher_0001\"; Version=\"1\"; Path=\"/acme\"")
     assertSetCookies(cookies,
-      CS("Customer","WILE_E_COYOTE",uri=Some("http:///acme"),version=1),
-      CS("Part_Number","Rocket_Launcher_0001",uri=Some("http:///acme"),version=1)
+      CS("Customer","WILE_E_COYOTE",path=Some("/acme"),version=1),
+      CS("Part_Number","Rocket_Launcher_0001",path=Some("/acme"),version=1)
     )
   }
 
   it should "parse set cookies with httpOnly" in {
     val cookies = CookieParser.parseSetCookieHeader("Customer=\"WILE_E_COYOTE\"; Version=\"1\"; Path=\"/acme\"; HttpOnly, Part_Number=\"Rocket_Launcher_0001\"; Version=\"1\"; Path=\"/acme\"; HttpOnly")
     assertSetCookies(cookies,
-      CS("Customer","WILE_E_COYOTE",uri=Some("http:///acme"),version=1,httpOnly = true),
-      CS("Part_Number","Rocket_Launcher_0001",uri=Some("http:///acme"),version=1, httpOnly = true)
+      CS("Customer","WILE_E_COYOTE",path=Some("/acme"),version=1,httpOnly = true),
+      CS("Part_Number","Rocket_Launcher_0001",path=Some("/acme"),version=1, httpOnly = true)
     )
   }
 
@@ -210,7 +210,8 @@ class CookieParserSpec extends FlatSpec with Matchers {
     val cookies = CookieParser.parseSetCookieHeader("RMID=732423sdfs73242; expires=Fri, 31-Dec-2010 23:59:59 GMT; path=/; domain=.example.net; HttpOnly")
     assertSetCookies(cookies,
       CS("RMID","732423sdfs73242",
-        uri=Some("http://example.net/"),
+        domain=Some("example.net"),
+        path=Some("/"),
         expires =Some(new DateTime(2010, 12, 31, 23, 59, 59, DateTimeZone.UTC)),
         version=1,
         httpOnly = true)
@@ -223,18 +224,11 @@ class CookieParserSpec extends FlatSpec with Matchers {
     actual should equal(expected)
   }
 
-  object C {
-    def apply(name: String, value: String, path: String): C = C(name, value, Some(path))
-
-    def apply(name: String, value: String): C = C(name, value, None)
-  }
-
-  case class C(name: String, value: String, path: Option[String] = None)
+  case class C(name: String, value: String)
 
   case class CS(name: String, value: String,
                 domain: Option[String] = None,
                 path: Option[String] = None,
-                uri: Option[String] = None,
                 expires: Option[DateTime] = None,
                 version: Int = 0,
                 comment: Option[String] = None,
@@ -255,9 +249,6 @@ class CookieParserSpec extends FlatSpec with Matchers {
   def assertCookie(cookie: Cookie, test: C) = {
     assertName(cookie, test.name)
     assertValue(cookie, test.value)
-    withClue("Bad Cookie Path:") {
-      cookie.path should equal(test.path)
-    }
   }
 
   def assertSetCookie(cookie: Cookie, test: CS) = {

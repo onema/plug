@@ -105,15 +105,16 @@ object Cookie {
 
   object Internals {
     def toSegments(path: Option[String]): Option[List[String]] =
-    // TODO: run only the parts of UriParser needed for pathQueryFragment
+    // TODO: run only the parts of UriParser needed for path
       path.flatMap(x => UriParser.tryParse(s"http://$x")).map(_.segments)
 
 
     def toDomainLabels(domain: Option[String]): List[String] = domain match {
       case None => Nil
       case Some(d) if d.isEmpty => Nil
-      // TODO: should validate domain as hostname
-      case Some(d) => d.split(".").toList
+      // TODO: should validate domain as hostname and strip leading '.'
+      case Some(d) => if(Uri.Internals.isIp(d)) List(d)
+      else d.split('.').toList.filter(!_.isEmpty)
     }
   }
 

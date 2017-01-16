@@ -8,6 +8,12 @@ import org.scalatest.{FlatSpec, Matchers}
   */
 class DomainTreeSpec extends FlatSpec with Matchers {
 
+  implicit val suffix = new PublicSuffix {
+    val node = SuffixNode(Map("com" -> SuffixNode.empty))
+    def splitOnSuffix(hostnameParts: List[String]): (List[String], List[String]) = node.splitOnSuffix(hostnameParts)
+  }
+
+
   "get" should "fetch cookies from all matching parent domains" in {
     val tree = DomainTree(None, Map(
       "com" -> DomainTree(None, Map(
@@ -33,9 +39,28 @@ class DomainTreeSpec extends FlatSpec with Matchers {
       ))
     ))
 
-    val updated = tree.update(cookie, List("foo", "example", "com"), Nil)
+    val updated = tree.update(cookie, List("com", "example", "foo"), Nil)
 
     updated should equal(tree)
+  }
+
+  it should "create new nodes for the subdomain" in {
+    val cookie = Cookie("a", "xyz")
+
+    val tree = DomainTree(None, Map(
+      "com" -> DomainTree(None, Map.empty)
+    ))
+    val expected = DomainTree(None, Map(
+      "com" -> DomainTree(None, Map(
+        "example" -> DomainTree(Some(CookieTree(Nil, Map.empty)), Map(
+          "foo" -> DomainTree(Some(CookieTree(List(cookie), Map.empty)), Map.empty)
+        ))
+      ))
+    ))
+
+    val updated = tree.update(cookie, List("com", "example", "foo"), Nil)
+
+    updated should equal(expected)
   }
 
 }

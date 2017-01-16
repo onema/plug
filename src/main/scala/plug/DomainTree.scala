@@ -1,7 +1,8 @@
 package plug
 
 object DomainTree {
-  val empty = DomainTree(None, Map.empty)
+  val emptyPrefixTree = DomainTree(Some(CookieTree.empty), Map.empty)
+  val emptySuffixTree = DomainTree(None, Map.empty)
 }
 
 case class DomainTree(cookies: Option[CookieTree], subTrees: Map[String, DomainTree]) {
@@ -30,24 +31,53 @@ case class DomainTree(cookies: Option[CookieTree], subTrees: Map[String, DomainT
     get(this, labels, Nil)
   }
 
-  def update(cookie: Cookie, labels: List[String], segments: List[String]): DomainTree = {
-    def update(tree: DomainTree, query: List[String]): DomainTree = query match {
-      case Nil =>
-        // this is the tree for the cookie's domain
-        cookies match {
-          case None => tree // None means we're not allowed to store cookies at this domain
-          case Some(cookieTree) => tree.copy(cookies = Some(cookieTree.update(cookie, segments)))
+  def update(cookie: Cookie, labels: List[String], segments: List[String])(implicit suffixTree: PublicSuffix): DomainTree = {
+    val (prefix, suffix) = suffixTree.splitOnSuffix(labels)
+    if (prefix.isEmpty) {
+      // there is no non-public part to the domain, which means the cookie cannot be set
+      this
+    } else {
+
+      def buildSuffix(tree: DomainTree, query: List[String]): Option[DomainTree] = query match {
+        case Nil => Some(tree) // reached the end of the suffix
+        case head::tail => tree.subTrees.get(head) match {
+          case None if cookie.expired => None // suffix doesn't exit, and the cookie is expired, so we're done
+          case None => buildSuffix(DomainTree.emptySuffixTree,tail) match {
+            case None => None
+            case Some(subtree) => Some(tree.copy(subTrees = tree.subTrees + (head -> subtree)))
+          }
+          case Some(subtree) => buildSuffix(subtree,tail) match {
+            case None => None
+            case Some(subtree2) => Some(tree.copy(subTrees = tree.subTrees + (head -> subtree2)))
+          }
         }
-      case head :: tail => tree.subTrees.get(head) match {
-        case None =>
-          // no domain tree for domain
-          if (cookie.expired) tree
-          else tree.copy(subTrees = tree.subTrees + (head -> update(DomainTree.empty, tail)))
-        case Some(subtree) =>
-          tree.copy(subTrees = tree.subTrees + (head -> update(subtree, tail)))
+      }
+
+      def update(tree: DomainTree, query: List[String]): DomainTree = query match {
+        case Nil =>
+          // this is the tree for the cookie's domain
+          tree.cookies match {
+            case None => tree // None means we're not allowed to store cookies at this domain part
+            case Some(cookieTree) => tree.copy(cookies = Some(cookieTree.update(cookie, segments)))
+          }
+        case head :: tail => tree.subTrees.get(head) match {
+          case None =>
+            // no domain tree for domain
+            if (cookie.expired) tree
+            else tree.copy(subTrees = tree.subTrees + (head -> update(DomainTree.emptyPrefixTree, tail)))
+          case Some(subtree) =>
+            // TODO: optimize by comparing the updated subtree to the one passed in to see if anything changed
+            tree.copy(subTrees = tree.subTrees + (head -> update(subtree, tail)))
+        }
+      }
+
+      (suffix match {
+        case Nil => Some(this) // no public suffix, we can just update the current tree
+        case _ => buildSuffix(this, suffix)
+      }) match {
+        case None => this // determined there was nothing to update
+        case Some(updateRoot) => update(updateRoot, labels)
       }
     }
-
-    update(this, labels)
   }
 }

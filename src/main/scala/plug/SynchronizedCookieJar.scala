@@ -10,7 +10,7 @@ class SynchronizedCookieJar(private var domainTree: DomainTree)(implicit publicS
   def empty: Boolean = count == 0
 
   def clear() = synchronized {
-    domainTree = DomainTree.empty
+    domainTree = DomainTree.emptySuffixTree
   }
 
   def toDomainTree = synchronized(this.domainTree)
