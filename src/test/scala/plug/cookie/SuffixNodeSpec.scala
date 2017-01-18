@@ -1,24 +1,11 @@
-package plug
+package plug.cookie
 
 import org.scalatest.{FlatSpec, Matchers}
 
 /**
   * Created by arne on 1/11/17.
   */
-class SuffixNodeSpec extends FlatSpec with Matchers {
-
-  val suffixes = SuffixNode(Map(
-    "com" -> SuffixNode.empty,
-    "au" -> SuffixNode(Map(
-      "com" -> SuffixNode.empty,
-      "org" -> SuffixNode.empty,
-      "edu" -> SuffixNode(Map(
-        "act" -> SuffixNode.empty,
-        "nsw" -> SuffixNode.empty
-      ))
-    ))
-  ))
-
+class SuffixNodeSpec extends FlatSpec with Matchers with TestSuffix {
 
   "addSuffix" should "build tree for new suffix" in {
     val expected = SuffixNode(Map(

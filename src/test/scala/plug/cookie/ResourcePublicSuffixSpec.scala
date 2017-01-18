@@ -1,8 +1,8 @@
-package plug
+package plug.cookie
 
 import java.io.BufferedInputStream
 
-import org.scalatest.{FlatSpec, Matchers, Spec}
+import org.scalatest.{FlatSpec, Matchers}
 
 /**
   * Created by arne on 1/10/17.

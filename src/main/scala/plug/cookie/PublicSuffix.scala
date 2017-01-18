@@ -1,4 +1,4 @@
-package plug
+package plug.cookie
 
 import java.io.{BufferedInputStream, InputStream}
 import java.util.zip.GZIPInputStream

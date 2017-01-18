@@ -1,7 +1,7 @@
 package plug
 
 import org.scalatest._
-import plug.CookieJar.Global.current
+import cookie.CookieJar.Global.current
 
 /**
   * Created by arne on 12/31/16.

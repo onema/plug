@@ -1,4 +1,6 @@
-package plug
+package plug.cookie
+
+import plug.Uri
 
 object NoCookieJar {
   object Implicits {

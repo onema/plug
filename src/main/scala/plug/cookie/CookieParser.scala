@@ -1,10 +1,9 @@
-package plug
+package plug.cookie
 
-
+import org.joda.time.format.DateTimeFormat
 import org.joda.time.{DateTime, DateTimeZone}
-import StringExtensions.StringEscape
-import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
-
+import plug.Uri
+import plug.StringExtensions._
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -118,8 +117,7 @@ object CookieParser {
           commentUri = parts.commentUri,
           version = parts.version,
           discard = parts.discard,
-          httpOnly = parts.httpOnly,
-          setCookie = true
+          httpOnly = parts.httpOnly
         )
         parseSetCookie(text, skipComma(text, index2), cookie :: acc)
     }

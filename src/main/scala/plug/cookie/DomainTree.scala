@@ -1,17 +1,17 @@
-package plug
+package plug.cookie
 
 object DomainTree {
-  val emptyPrefixTree = DomainTree(Some(CookieTree.empty), Map.empty)
+  val emptyPrefixTree = DomainTree(Some(PathTree.empty), Map.empty)
   val emptySuffixTree = DomainTree(None, Map.empty)
 }
 
-case class DomainTree(cookies: Option[CookieTree], subTrees: Map[String, DomainTree]) {
+case class DomainTree(cookies: Option[PathTree], subTrees: Map[String, DomainTree]) {
 
   lazy val count: Int = cookies.map(_.count).sum + subTrees.map(_._2.count).sum
 
   lazy val empty: Boolean = count == 0
 
-  def get(labels: List[String], segments: List[String]): List[Cookie] = {
+  def get(domain: Domain, segments: List[String]): List[Cookie] = {
     def get(tree: DomainTree, query: List[String], acc: List[Cookie]): List[Cookie] = {
       def gatherCookies: List[Cookie] = tree.cookies.map(_.get(segments)).getOrElse(Nil) ::: acc
       query match {
@@ -28,11 +28,11 @@ case class DomainTree(cookies: Option[CookieTree], subTrees: Map[String, DomainT
         }
       }
     }
-    get(this, labels, Nil)
+    get(this, domain.parts, Nil)
   }
 
-  def update(cookie: Cookie, labels: List[String], segments: List[String])(implicit suffixTree: PublicSuffix): DomainTree = {
-    val (prefix, suffix) = suffixTree.splitOnSuffix(labels)
+  def update(cookie: Cookie, domain: Domain, segments: List[String])(implicit suffixTree: PublicSuffix): DomainTree = {
+    val (prefix, suffix) = suffixTree.splitOnSuffix(domain.parts)
     if (prefix.isEmpty) {
       // there is no non-public part to the domain, which means the cookie cannot be set
       this
@@ -76,7 +76,7 @@ case class DomainTree(cookies: Option[CookieTree], subTrees: Map[String, DomainT
         case _ => buildSuffix(this, suffix)
       }) match {
         case None => this // determined there was nothing to update
-        case Some(updateRoot) => update(updateRoot, labels)
+        case Some(updateRoot) => update(updateRoot, domain.parts)
       }
     }
   }

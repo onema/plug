@@ -1,5 +1,7 @@
 package plug
 
+import plug.cookie.CookieJar
+
 trait RequestBody
 
 object EmptyRequestBody extends RequestBody

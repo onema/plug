@@ -1,4 +1,4 @@
-package plug
+package plug.cookie
 
 import org.joda.time.{DateTime, DateTimeZone}
 import org.scalatest.{FlatSpec, Matchers}
@@ -46,8 +46,7 @@ class CookieParserSpec extends FlatSpec with Matchers {
   }
 
   it should "roundtrip header created with Cookie.renderCookieHeader" in {
-    val cookie = Cookie("Customer", "WILE_E_COYOTE", setCookie = false)
-    print(cookie.toCookieHeader)
+    val cookie = Cookie("Customer", "WILE_E_COYOTE")
     val cookies = CookieParser.parseCookieHeader(cookie.toCookieHeader)
     assertSingleCookie(cookies, C("Customer", "WILE_E_COYOTE"))
   }
@@ -218,6 +217,29 @@ class CookieParserSpec extends FlatSpec with Matchers {
     )
   }
 
+  it should "ignore case in known attributes" in {
+    val cookies = CookieParser.parseSetCookieHeader("foo=bar; EXPIRES=Fri, 31-Dec-2010 23:59:59 GMT; PATH=/; DOMAIN=.example.net; httponly; SECURE")
+    assertSetCookies(cookies,
+      CS("foo","bar",
+        domain=Some("example.net"),
+        path=Some("/"),
+        expires =Some(new DateTime(2010, 12, 31, 23, 59, 59, DateTimeZone.UTC)),
+        version=1,
+        httpOnly = true,
+        secure = true)
+    )
+  }
+
+  it should "ignore path attribute if it doesn't start with a '/'" in {
+    val cookies = CookieParser.parseSetCookieHeader("foo=bar; path=foo/bar; domain=.example.net;")
+    assertSetCookies(cookies,
+      CS("foo","bar",
+        domain=Some("example.net"),
+        path=None,
+        version=1)
+    )
+  }
+
   "parseCookieDateTimeString" should "parse dates in pattern " in {
     val expected = Some(new DateTime(2010, 12, 31, 23, 59, 59, DateTimeZone.UTC))
     val actual = CookieParser.Internals.parseCookieDateTimeString("Fri, 31-Dec-2010 23:59:59 GMT")
@@ -233,7 +255,7 @@ class CookieParserSpec extends FlatSpec with Matchers {
                 version: Int = 0,
                 comment: Option[String] = None,
                 commentUri: Option[String] = None,
-                discard: Boolean = false,
+                hostOnly: Boolean = false,
                 secure: Boolean = false,
                 httpOnly: Boolean = false
                )
@@ -255,7 +277,7 @@ class CookieParserSpec extends FlatSpec with Matchers {
     assertName(cookie, test.name)
     assertValue(cookie, test.value)
     withClue("Bad Domain:") {
-      cookie.domain should equal(test.domain)
+      cookie.domain.optionalDomainString should equal(test.domain)
     }
     withClue("Bad Path:") {
       cookie.path should equal(test.path)
@@ -263,17 +285,8 @@ class CookieParserSpec extends FlatSpec with Matchers {
     withClue("Bad expires:") {
       cookie.expires should equal(test.expires)
     }
-    withClue("Bad version:") {
-      cookie.version should equal(test.version)
-    }
-    withClue("Bad comment:") {
-      cookie.comment should equal(test.comment)
-    }
-    withClue("Bad commentUri:") {
-      cookie.commentUri.map(_.toUriString) should equal(test.commentUri)
-    }
-    withClue("Bad discard:") {
-      cookie.discard should equal(test.discard)
+    withClue("Bad hostOnly:") {
+      cookie.hostOnly should equal(test.hostOnly)
     }
     withClue("Bad secure:") {
       cookie.secure should equal(test.secure)

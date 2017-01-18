@@ -1,31 +1,15 @@
-package plug
+package plug.cookie
 
 import org.joda.time.format.DateTimeFormat
 import org.joda.time.{DateTime, DateTimeZone}
 import plug.StringExtensions.StringEscape
+import plug.{Uri, UriParser}
 
 object Cookie {
 
   // TODO: Really should break this into Cookie and SetCookie, at the very least at the object level
-
-  /**
-    * Gets the matching cookie with the longest path from a collection of cookies.
-    *
-    * @param cookies Collection of cookies.
-    * @param name    Cookie name.
-    * @return Matching cookie with longest path, or None if no cookies matched.
-    */
-  def getCookie(cookies: List[Cookie], name: String): Option[Cookie] = cookies.foldLeft[(Option[Cookie], Int)]((None, -1)) {
-    case ((result, maxPathLength), cookie) =>
-
-      // TODO (arnec): Should also match on domain/path as sanity check
-      val length = cookie.path.map(_.length).getOrElse(0)
-      if (cookie.name != name || length <= maxPathLength) {
-        (result, maxPathLength)
-      } else {
-        (Some(cookie), length)
-      }
-  }._1
+  // TODO: Remove comment, commentUri, discard and version
+  // TODO: Add max-age
 
   /**
     * Render a collection of cookies into a cookie header.
@@ -58,7 +42,7 @@ object Cookie {
     * @param version    Cookie version (if omitted set to 0 for regular and 1 for set cookies).
     * @param discard    true if the cookie is to be discarded.
     * @param httpOnly   true if cookie is only accessible to the http transport, i.e. not client side scripts.
-    * @param setCookie  true is this is a set cookie (sets version to 1).
+    * @param hostOnly   true is cookie is only accessible from the host that set it.
     * @return New cookie instance.
     */
   def apply(name: String,
@@ -72,17 +56,17 @@ object Cookie {
             version: Option[Int] = None,
             discard: Boolean = false,
             httpOnly: Boolean = false,
-            setCookie: Boolean = true): Cookie = {
+            hostOnly: Boolean = false): Cookie = {
     new Cookie(name,
       value,
-      Internals.toDomainLabels(domain),
+      Domain(domain),
       Internals.toSegments(path),
       validateExpire(expires),
-      version = version.getOrElse(if (setCookie) 1 else 0),
       secure = secure,
       comment = comment,
       commentUri = commentUri,
-      httpOnly = httpOnly
+      httpOnly = httpOnly,
+      hostOnly = hostOnly
     )
   }
 
@@ -107,15 +91,6 @@ object Cookie {
     def toSegments(path: Option[String]): Option[List[String]] =
     // TODO: run only the parts of UriParser needed for path
       path.flatMap(x => UriParser.tryParse(s"http://$x")).map(_.segments)
-
-
-    def toDomainLabels(domain: Option[String]): List[String] = domain match {
-      case None => Nil
-      case Some(d) if d.isEmpty => Nil
-      // TODO: should validate domain as hostname and strip leading '.'
-      case Some(d) => if(Uri.Internals.isIp(d)) List(d)
-      else d.split('.').toList.filter(!_.isEmpty)
-    }
   }
 
 }
@@ -125,32 +100,28 @@ object Cookie {
   *
   * @param name         Cookie name.
   * @param value        Cookie value.
-  * @param hostLabels Cookie Domain.
+  * @param domain       Cookie Domain.
   * @param segments     Cookie path segments. Some(Nil) denotes root path '/'
   * @param version      Cookie version.
   * @param secure       true if the cookie is used on Https only.
-  * @param discard      true if the cookie is to be discarded.
+  * @param persistent   true if the cookie is to be persisted.
   * @param comment      Cookie comment.
   * @param commentUri   Cookie comment uri.
   * @param httpOnly     true if cookie is only accessible to the http transport, i.e. not client side scripts.
+  * @param hostOnly     true if cookie is only returned to the specific host.
   */
 class Cookie private(val name: String,
                      val value: String,
-                     val hostLabels: List[String],
+                     val domain: Domain,
                      val segments: Option[List[String]],
                      val expires: Option[DateTime] = None,
                      val version: Int = 0,
                      val secure: Boolean = false,
-                     val discard: Boolean = false,
+                     val persistent: Boolean = false,
                      val comment: Option[String] = None,
                      val commentUri: Option[Uri] = None,
-                     val httpOnly: Boolean = false) {
-
-  /** Cookie Domain. */
-  lazy val domain: Option[String] = hostLabels match {
-    case Nil => None
-    case _ => Some(String.join(".", hostLabels: _*))
-  }
+                     val httpOnly: Boolean = false,
+                     val hostOnly: Boolean = false) {
 
   /** Cookie Path. */
   lazy val path: Option[String] = segments.map("/" + String.join("/", _: _*))
@@ -158,41 +129,42 @@ class Cookie private(val name: String,
   /** true if the cookie is already expired. */
   def expired = expires.exists(_.isBeforeNow)
 
-  /** hashCode based soley on [[name]], [[value]], [[hostLabels]] & [[segments]]. */
-  override def hashCode(): Int = List(name, value, hostLabels, segments)
+  /** hashCode based soley on [[name]], [[value]], [[domain]] & [[segments]]. */
+  override def hashCode(): Int = List(name, value, domain, segments)
     .foldLeft(0) { case (acc, x) => acc * 41 + x.hashCode() }
 
   /**
     * Compare instances for identical contents.
     *
-    * <p>[[Cookie]] instances are considered identical based solely on [[name]], [[value]], [[hostLabels]] & [[segments]].
+    * <p>[[Cookie]] instances are considered identical based solely on [[name]], [[value]], [[domain]] & [[segments]].
     *
     * @param obj Other instance.
     * @return
     */
   override def equals(obj: Any) = obj match {
-    case c: Cookie => name == c.name && value == c.value && hostLabels == c.hostLabels && segments == c.segments
+    case c: Cookie => name == c.name && value == c.value && domain == c.domain && segments == c.segments
     case _ => false
   }
 
   override lazy val toString: String = {
-    val uri = s"${domain.getOrElse("")}${path.getOrElse("")}"
+    val uri = s"${domain.optionalDomainString.getOrElse("")}${path.getOrElse("")}"
     val location = if (uri.isEmpty) "" else s"@$uri"
     s"Cookie($name$location=$value)"
   }
 
   private def copy(name: String = name,
                    value: String = value,
-                   domainLabels: List[String] = hostLabels,
+                   domain: Domain = domain,
                    segments: Option[List[String]] = segments,
                    expires: Option[DateTime] = expires,
                    version: Int = version,
                    secure: Boolean = secure,
-                   discard: Boolean = discard,
+                   persistent: Boolean = persistent,
                    comment: Option[String] = comment,
                    commentUri: Option[Uri] = commentUri,
-                   httpOnly: Boolean = httpOnly) =
-    new Cookie(name, value, domainLabels, segments, expires, version, secure, discard, comment, commentUri, httpOnly)
+                   httpOnly: Boolean = httpOnly,
+                   hostOnly: Boolean = hostOnly) =
+    new Cookie(name, value, domain, segments, expires, version, secure, persistent, comment, commentUri, httpOnly, hostOnly)
 
 
   /**
@@ -201,8 +173,9 @@ class Cookie private(val name: String,
     * @param domain Domain to use for new instance.
     * @return New cookie.
     */
-  def withDomain(domain: Option[String]): Cookie = copy(domainLabels = Cookie.Internals.toDomainLabels(domain))
+  def withDomain(domain: Option[String]): Cookie = copy(domain = Domain(domain))
 
+  def withDomain(domain: Domain): Cookie = copy(domain=domain)
   /**
     * Create new cookie based on current instance with path.
     *
@@ -229,13 +202,17 @@ class Cookie private(val name: String,
   def withExpiration(expires: DateTime): Cookie = copy(expires = Cookie.validateExpire(Some(expires)))
 
   /**
-    * Create new cookie based on current instance with discard flag.
+    * Create new cookie based on current instance with persistence flag set
     *
-    * @param discard true if the cookie should be discarded.
     * @return New Cookie.
     */
-  def withDiscard(discard: Boolean): Cookie = copy(discard = discard)
+  def withPersistence: Cookie = copy(persistent = true)
 
+  def withoutPersistence: Cookie = copy(persistent = false)
+
+  def withHostOnly: Cookie = copy(hostOnly = true)
+
+  def withoutHostOnly: Cookie = copy(hostOnly = false)
   /**
     * Create an Http cookie header from the current instance.
     *
@@ -254,9 +231,8 @@ class Cookie private(val name: String,
     result.append(s"""$name="${value.escapeString}"""")
     comment.foreach(x => result.append(s"""; Comment=${x.escapeString}""""))
     commentUri.foreach(x => result.append(s"""; Comment=${x.toUriString.escapeString}""""))
-    if (discard) result.append("; Discard")
     path.foreach(x => result.append(s"""; Path="$x""""))
-    domain.foreach(x => result.append(s"""; Domain="$x""""))
+    domain.optionalDomainString.foreach(x => result.append(s"""; Domain="$x""""))
     expires.map(Cookie.formatCookieDateTimeString).foreach(x => result.append(s"""; Expires=$x"""))
     if (version > 1) {
       result.append(s"""; Version="$version"""")
