@@ -1,6 +1,6 @@
 package abnf
 
-import org.scalatest.{FlatSpec, Matchers, Spec}
+import org.scalatest.{FlatSpec, Matchers}
 
 class ParserSpec extends FlatSpec with Matchers {
 
@@ -72,8 +72,9 @@ class ParserSpec extends FlatSpec with Matchers {
 
     // State = 2(ALPHA)
     case object State extends SpecificRepetition(ALPHA, 2) {
-      override def parse(input: String, position: Int): Option[(Int, Token)] = super.parse(input, position) map {
-        case (p, Token(start, end)) => (p, PostalAddressTokens.State(start, end))
+      override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = super.parse(input, position) match {
+        case (p, Left(Token(start, end))) => (p, Left(PostalAddressTokens.State(start, end)))
+        case x => x
       }
     }
 
@@ -82,14 +83,15 @@ class ParserSpec extends FlatSpec with Matchers {
       SpecificRepetition(DIGIT, 5),
       OptionalSequence(Terminal("-"), SpecificRepetition(DIGIT, 4))
     ) {
-      override def parse(input: String, position: Int): Option[(Int, Token)] = super.parse(input, position) map {
-        case (p, Token.Concatenation(s, e, List(Token.Repetition(start, end, _), Token.Repetition(_, _, Nil)))) =>
-          (p, PostalAddressTokens.ZipCode(s, e, (start, end), None))
-        case (p, Token.Concatenation(s, e, List(
+      override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = super.parse(input, position) match {
+        case (p, Left(Token.Concatenation(s, e, List(Token.Repetition(start, end, _), Token.OptionalSequence(_, _, Nil))))) =>
+          (p, Left(PostalAddressTokens.ZipCode(s, e, (start, end), None)))
+        case (p, Left(Token.Concatenation(s, e, List(
         Token.Repetition(start, end, _),
-        Token.Repetition(_, _, List(Token.Concatenation(_, _, List(_, Token.Repetition(start1, end1, _)))))
-        ))) =>
-          (p, PostalAddressTokens.ZipCode(s, e, (start, end), Some((start1, end1))))
+        Token.OptionalSequence(_, _, List(_, Token.Repetition(start1, end1, _)))
+        )))) =>
+          (p, Left(PostalAddressTokens.ZipCode(s, e, (start, end), Some((start1, end1)))))
+        case x => x
       }
     }
 
@@ -115,7 +117,7 @@ class ParserSpec extends FlatSpec with Matchers {
 
   it should "parse State" in {
     import PostalAddressTokens._
-    val expected = Some(State(0, 1))
+    val expected = Left(State(0, 2))
     val actual = Parser.parse("CA", PostalAddressGrammar.State)
 
     actual should equal(expected)
@@ -123,13 +125,17 @@ class ParserSpec extends FlatSpec with Matchers {
 
   it should "parse 5 digit ZipCode" in {
     import PostalAddressTokens._
-    val expected = Some(ZipCode(0,4,(0, 4), None))
+    val expected = Left(ZipCode(0,5,(0, 5), None))
     val actual = Parser.parse("90210", PostalAddressGrammar.ZipCode)
+
+    actual should equal(expected)
   }
 
   it should "parse 5+4 digit ZipCode" in {
     import PostalAddressTokens._
-    val expected = Some(ZipCode(0,9,(0,4),Some((6, 9))))
+    val expected =  Left(ZipCode(0,10,(0,5),Some((6, 10))))
     val actual = Parser.parse("90210-1234", PostalAddressGrammar.ZipCode)
+
+    actual should equal(expected)
   }
 }

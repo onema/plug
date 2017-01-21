@@ -1,19 +1,21 @@
 package abnf
 
 trait Token {
+  /**  Inclusive start offset of match. */
   def start: Int
 
+  /** Exclusive end offset of match. */
   def end: Int
 }
 
 object Token {
 
-  def unapply(arg: Token): Option[(Int, Int)] = Some(arg.start,arg.end)
+  def unapply(arg: Token): Option[(Int, Int)] = Some(arg.start, arg.end)
 
   trait Value extends Token {
     val start: Int
 
-    def end: Int = start
+    def end: Int = start + 1
   }
 
   case class Single(start: Int) extends Value
@@ -40,22 +42,21 @@ object Token {
 
   case class Concatenation(start: Int, end: Int, tokens: List[Token]) extends Token
 
+  case class OptionalSequence(start: Int, end: Int, tokens: List[Token]) extends Token
+
 }
 
 trait Rule {
   // TODO: Instead of Option[(Int,Token)] consider (Int,Either[Token,Rule]) to communicate where it failed and on what
-  def parse(input: String, position: Int): (Int, Either[Token,Rule]) =
-    if(position >= input.length) (position,Right(Rule.OOB))
-    else safeParse(input, position)
+  def parse(input: String, position: Int): (Int, Either[Token, Rule])
 
-  def safeParse(input: String, position: Int): (Int, Either[Token,Rule])
+  def checkBounds(input: String, position: Int, rule: Rule)(f: => (Int, Either[Token, Rule])) =
+    if (position >= input.length) (position, Right(rule))
+    else f
+
 }
 
 object Rule {
-
-  case object OOB extends Rule {
-    override def safeParse(input: String, position: Int): (Int, Either[Token, Rule]) = ???
-  }
 
   object Alternative {
     def apply(rules: Rule*): Alternative = new Alternative(rules: _*)
@@ -64,11 +65,11 @@ object Rule {
   implicit val defaultToken: Option[(Token => Token)] = None
 
   class Alternative(rules: Rule*) extends Rule {
-    override def safeParse(input: String, position: Int): Option[(Int, Token)] = {
-      def tryParse(rules: List[Rule]): Option[(Int, Token)] = rules match {
-        case Nil => None
+    override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = checkBounds(input, position, this) {
+      def tryParse(rules: List[Rule]): (Int, Either[Token, Rule]) = rules match {
+        case Nil => (position, Right(this))
         case head :: tail => head.parse(input, position) match {
-          case None => tryParse(tail)
+          case (_, Right(_)) => tryParse(tail)
           case x => x
         }
       }
@@ -78,22 +79,23 @@ object Rule {
 
   object Concatenation {
     def apply(rules: Rule*): Concatenation = new Concatenation(rules: _*)
+
     def apply(rules: List[Rule], token: Option[(Token => Token)]): Concatenation = new Concatenation(rules: _*)(token)
   }
 
 
   class Concatenation(rules: Rule*)(implicit token: Option[(Token => Token)] = None) extends Rule {
-    override def safeParse(input: String, position: Int): Option[(Int, Token)] = {
-      def parse(rules: List[Rule], p: Int, r: List[Token]): Option[(Int, Token)] = rules match {
+    override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = checkBounds(input, position, this) {
+      def parse(rules: List[Rule], p: Int, r: List[Token]): (Int, Either[Token, Rule]) = rules match {
         case Nil =>
-          val defaultToken = Token.Concatenation(position, p-1, r.reverse)
-          Some((p, token match {
+          val defaultToken = Token.Concatenation(position, p, r.reverse)
+          (p, Left(token match {
             case None => defaultToken
             case Some(f) => f(defaultToken)
           }))
         case head :: tail => head.parse(input, p) match {
-          case None => None
-          case Some((p2, t)) => parse(tail, p2, t :: r)
+          case f@(_, Right(_)) => f
+          case (p2, Left(t)) => parse(tail, p2, t :: r)
         }
       }
       parse(rules.toList, position, Nil)
@@ -104,7 +106,15 @@ object Rule {
     def apply(rules: Rule*): OptionalSequence = new OptionalSequence(rules: _*)
   }
 
-  class OptionalSequence(rules: Rule*) extends VariableRepetition(Concatenation(rules: _*), None, Some(1))
+  class OptionalSequence(rules: Rule*) extends VariableRepetition(Concatenation(rules: _*), None, Some(1)) {
+    override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = super.parse(input, position) match {
+      case (p, Left(Token.Repetition(s, e, List(Token.Concatenation(_, _, ts))))) =>
+        (p, Left(Token.OptionalSequence(s, e, ts)))
+      case (p, Left(Token.Repetition(s, e, Nil))) =>
+        (p, Left(Token.OptionalSequence(s, e, Nil)))
+      case (p, Right(_)) => (p, Right(this))
+    }
+  }
 
   object SpecificRepetition {
     def apply(rule: Rule, n: Int): SpecificRepetition = new SpecificRepetition(rule, n)
@@ -117,20 +127,20 @@ object Rule {
   }
 
   class VariableRepetition(rule: Rule, lower: Option[Int] = None, upper: Option[Int] = None) extends Rule {
-    override def safeParse(input: String, position: Int): Option[(Int, Token)] = {
+    override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = checkBounds(input, position, this) {
       val l = lower.getOrElse(0)
       val u = upper.getOrElse(Int.MaxValue)
       if (l < 0 || l > u || u == 0)
-        None
+        (position, Right(this))
       else {
         import Token.Repetition
-        def parse(i: Int, p: Int, r: List[Token]): Option[(Int, Token)] = {
+        def parse(i: Int, p: Int, r: List[Token]): (Int, Either[Token, Rule]) = {
           if (i >= u) {
-            Some((p, Repetition(position, p-1, r.reverse)))
+            (p, Left(Repetition(position, p, r.reverse)))
           } else {
             rule.parse(input, p) match {
-              case None => if (r.length >= l) Some((p, Repetition(position, p-1, r.reverse))) else None
-              case Some((p2, t)) => parse(i + 1, p2, t :: r)
+              case f@(_, Right(_)) => if (r.length >= l) (p, Left(Repetition(position, p, r.reverse))) else f
+              case (p2, Left(t)) => parse(i + 1, p2, t :: r)
             }
           }
         }
@@ -145,12 +155,15 @@ object Rule {
   }
 
   class Terminal(value: String) extends Rule {
-    override def safeParse(input: String, position: Int): Option[(Int, Token)] = {
+    override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = checkBounds(input, position, this) {
       val l = value.length
-      if (input.length - position < l) None
-      else if (input.substring(position, position + l).equalsIgnoreCase(value))
-        Some((position + l+1, Token.Terminal(position, position + l, value)))
-      else None
+      if (input.length - position < l) (position, Right(this))
+      else {
+        val target = input.substring(position, position + l)
+        if (target.equalsIgnoreCase(value))
+          (position + l, Left(Token.Terminal(position, position + l, target)))
+        else (position, Right(this))
+      }
     }
   }
 
@@ -159,9 +172,9 @@ object Rule {
   }
 
   class Range(lower: Char, upper: Char, token: Int => Token) extends Rule {
-    override def safeParse(input: String, position: Int): Option[(Int, Token)] = {
+    override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = checkBounds(input, position, this) {
       val c = input(position)
-      if (c >= lower && c <= upper) Some((position + 1, token(position))) else None
+      if (c >= lower && c <= upper) (position + 1, Left(token(position))) else (position, Right(this))
     }
   }
 
@@ -170,8 +183,9 @@ object Rule {
   }
 
   class Single(c: Char, token: Int => Token) extends Rule {
-    override def safeParse(input: String, position: Int): Option[(Int, Token)] =
-      if (input(position) == c) Some((position + 1, token(position))) else None
+    override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = checkBounds(input, position, this) {
+      if (input(position) == c) (position + 1, Left(token(position))) else (position, Right(this))
+    }
   }
 
   case object ALPHA extends Alternative(Range(0x41, 0x5a, Token.ALPHA), Range(0x61, 0x7a, Token.ALPHA))
@@ -193,5 +207,8 @@ object Rule {
 }
 
 object Parser {
-  def parse(input: String, grammar: Rule): Option[Token] = grammar.parse(input, 0).map(_._2)
+  def parse(input: String, grammar: Rule): Either[Token, (Int, Rule)] = grammar.parse(input, 0) match {
+    case (_, Left(t)) => Left(t)
+    case (p, Right(r)) => Right((p, r))
+  }
 }
