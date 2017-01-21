@@ -18,13 +18,17 @@ class SynchronizedCookieJar(private var domainTree: DomainTree = DomainTree.empt
   def toDomainTree = synchronized(this.domainTree)
 
   def get(uri: Uri): List[Cookie] = synchronized {
-    val cookies = domainTree.get(Domain(uri.host), uri.segments)
-    if(uri.scheme.equalsIgnoreCase("https")) cookies else cookies.filterNot(_.secure)
+    val domain = Domain(uri.host)
+    val secureFilter: Cookie => Boolean =
+      if (uri.scheme.equalsIgnoreCase("https")) cookie => true
+      else cookie => !cookie.secure
+    domainTree.get(domain, uri.segments)
+      .filter { cookie => !cookie.expired && secureFilter(cookie) && (!cookie.hostOnly ||cookie.domain == domain) }
   }
 
-  def update(cookie: Cookie, uri: Uri): Unit = CookieJar.checkCookieForUpdate(cookie, uri) map {
+  def update(cookie: Cookie, uri: Uri): Unit = cookie.validateCookieForUri(uri) map {
     cookie => synchronized {
-      domainTree.update(cookie, cookie.domain, cookie.segments.get)
+      domainTree.update(cookie, cookie.domain, cookie.path.segments)
     }
   }
 }

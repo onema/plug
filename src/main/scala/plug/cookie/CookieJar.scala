@@ -17,34 +17,6 @@ object CookieJar {
       _cookieJar.update(cookie, uri)
     }
   }
-
-  def requestHostIsSubDomainOfCookieDomain(host: String, cookieDomain: Domain): Boolean = ???
-
-  def requestPathIsSubDirectoryOfCookiePath(segments: List[String], segments1: List[String]) = ???
-
-  def checkCookieForUpdate(cookie: Cookie, uri: Uri): Option[Cookie] = (cookie.domain match {
-    case Domain.empty =>
-      // set host labels in cookie
-      Some(cookie.withDomain(Some(uri.host)).withHostOnly)
-
-    case domain if requestHostIsSubDomainOfCookieDomain(uri.host, domain) =>
-      // check that the cookie domain is a subdomain of
-      Some(cookie)
-    case _ => None
-
-  }).flatMap {
-    cookie => cookie.segments match {
-      case None =>
-
-        Some(cookie.withSegments(Some(uri.segments)))
-      case Some(segments) if requestPathIsSubDirectoryOfCookiePath(uri.segments, segments) =>
-
-        Some(cookie)
-
-      case _ => None
-    }
-  }
-
 }
 
 trait CookieJar {

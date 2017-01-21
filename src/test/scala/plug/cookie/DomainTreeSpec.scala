@@ -24,7 +24,7 @@ class DomainTreeSpec extends FlatSpec with Matchers with TestSuffix {
   }
 
   "update" should "not create a node for expired cookie" in {
-    val cookie = Cookie("a", "xyz", expires = Some(DateTime.now().minusDays(1)))
+    val cookie = Cookie("a", "xyz", expiresOrMaxAge = Some(Left(DateTime.now().minusDays(1))))
 
     val tree = DomainTree(None, Map(
       "com" -> DomainTree(None, Map(

@@ -111,12 +111,8 @@ object CookieParser {
           cookieValue,
           domain = parts.domain,
           path = parts.path,
-          expires = parts.expires,
+          expiresOrMaxAge = parts.expires.map(Left(_)),
           secure = parts.secure,
-          comment = parts.comment,
-          commentUri = parts.commentUri,
-          version = parts.version,
-          discard = parts.discard,
           httpOnly = parts.httpOnly
         )
         parseSetCookie(text, skipComma(text, index2), cookie :: acc)

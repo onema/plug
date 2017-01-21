@@ -138,7 +138,7 @@ class PathTreeSpec extends FlatSpec with Matchers {
   }
 
   it should "remove an expired at its path only" in {
-    val cookie = Cookie("a", "xyz", expires = Some(DateTime.now().minusDays(1)))
+    val cookie = Cookie("a", "xyz", expiresOrMaxAge = Some(Left(DateTime.now().minusDays(1))))
     val tree = PathTree(List(Cookie("a", "root")), Map(
       "a" -> PathTree(List(Cookie("a", "a")), Map(
         "b" -> PathTree(List(Cookie("a", "a/b")), Map(

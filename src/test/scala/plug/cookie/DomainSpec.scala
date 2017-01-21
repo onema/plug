@@ -24,11 +24,39 @@ class DomainSpec extends FlatSpec with Matchers {
     Domain("") should equal(Domain.empty)
   }
 
-  "optionalDomainString" should "return None for empty Domain" in {
-    Domain.empty.optionalDomainString should equal(None)
+  it should "canonicalize to case insensitive form" in {
+    Domain("Foo.eXample.COM") should equal(Domain("foo.EXAMPLE.com"))
+  }
+
+  "asOptionalString" should "return None for empty Domain" in {
+    Domain.empty.asOptionalString should equal(None)
   }
 
   it should "return domain string" in {
-    Domain("foo.example.com").optionalDomainString should equal(Some("foo.example.com"))
+    Domain("foo.example.com").asOptionalString should equal(Some("foo.example.com"))
+  }
+
+  it should "return lower cased form" in {
+    Domain("Foo.eXample.COM").asOptionalString should equal(Some("foo.example.com"))
+  }
+
+  "isSubDomainOf" should "be true if origin domain is a sub domain" in {
+    Domain("foo.example.com").isSubDomainOf(Domain("example.com")) shouldBe true
+  }
+
+  it should "be true if origin domain is the same domain" in {
+    Domain("example.com").isSubDomainOf(Domain("example.com")) shouldBe true
+  }
+
+  it should "be false if orgin domain is a different domain" in {
+    Domain("example.com").isSubDomainOf(Domain("example.org")) shouldBe false
+  }
+
+  it should "be false if provided domain is empty" in {
+    Domain("example.com").isSubDomainOf(Domain.empty) shouldBe false
+  }
+
+  it should "be false if origin domain is empty" in {
+    Domain.empty.isSubDomainOf(Domain("foo.example.com")) shouldBe false
   }
 }

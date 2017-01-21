@@ -1,8 +1,5 @@
 package plug
 
-/**
-  * Created by arne on 1/3/17.
-  */
 object StringExtensions {
 
   implicit class StringEscape(text: String) {

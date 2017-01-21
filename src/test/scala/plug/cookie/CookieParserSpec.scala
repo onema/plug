@@ -277,10 +277,10 @@ class CookieParserSpec extends FlatSpec with Matchers {
     assertName(cookie, test.name)
     assertValue(cookie, test.value)
     withClue("Bad Domain:") {
-      cookie.domain.optionalDomainString should equal(test.domain)
+      cookie.domain.asOptionalString should equal(test.domain)
     }
     withClue("Bad Path:") {
-      cookie.path should equal(test.path)
+      cookie.path.asOptionalString should equal(test.path)
     }
     withClue("Bad expires:") {
       cookie.expires should equal(test.expires)
