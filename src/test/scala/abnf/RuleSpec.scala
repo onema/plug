@@ -15,6 +15,10 @@ class RuleSpec extends FlatSpec with Matchers {
     DIGIT.parse("aaa5bbb", 3) should equal(4, Left(Token.DIGIT(3)))
   }
 
+  "CRLF" should "match \r\n linefeed" in {
+    CRLF.parse("x\r\ny", 1) should equal((3,Left(Token.CRLF(1,3))))
+  }
+
   it should behave like parseFailures(DIGIT, "abcdef")
 
   "Single" should "parse single, exact char" in {
@@ -69,19 +73,76 @@ class RuleSpec extends FlatSpec with Matchers {
     Concatenation(ALPHA, SP).parse("...aa   ", 3) should equal((4, Right(SP)))
   }
 
-  it should "fail to parse on out of bounds request" in {
-    val input = "12345"
-    val rule = Concatenation(ALPHA, SP)
-    rule.parse(input, input.length) should equal((input.length, Right(rule)))
+  it should behave like parseFailures(Concatenation(ALPHA, SP), "--------", Some(ALPHA))
+
+  "VariableRepetition" should "match match all possible without limits" in {
+    import Token.{ALPHA => A}
+    val rule = VariableRepetition(ALPHA)
+    rule.parse("aaaabc123", 3) should equal((6, Left(Token.Repetition(3, 6, List(A(3), A(4), A(5))))))
   }
 
-  def parseFailures(rule: Rule, input: String): Unit = {
+  it should "consume the rest of the string as long as it matches without limits" in {
+    import Token.{ALPHA => A}
+    val rule = VariableRepetition(ALPHA)
+    rule.parse("aaaabc", 3) should equal((6, Left(Token.Repetition(3, 6, List(A(3), A(4), A(5))))))
+  }
+
+  it should "return an empty Repetition if nothing matches and 0 matches are allowed" in {
+    val rule = VariableRepetition(ALPHA)
+    rule.parse("12345", 3) should equal((3, Left(Token.Repetition(3, 3, Nil))))
+  }
+
+  it should "only match if at least as many as lower bound are matched" in {
+    import Token.{ALPHA => A}
+    val rule = VariableRepetition(ALPHA, Some(2))
+    rule.parse("aaaab1", 3) should equal((5, Left(Token.Repetition(3, 5, List(A(3), A(4))))))
+  }
+
+  it should "not match if less than lower bound are matched" in {
+    val rule = VariableRepetition(ALPHA, Some(2))
+    rule.parse("123a45", 3) should equal((4, Right(ALPHA)))
+  }
+
+  it should "fail on upper bound if lower bound has not been met yet" in {
+    val rule = VariableRepetition(ALPHA, Some(2))
+    rule.parse("aaaa", 3) should equal((4, Right(ALPHA)))
+  }
+
+  it should "match only as many as upper bound allows" in {
+    import Token.{ALPHA => A}
+    val rule = VariableRepetition(ALPHA, None, Some(2))
+    rule.parse("aaaabc", 3) should equal((5, Left(Token.Repetition(3, 5, List(A(3), A(4))))))
+  }
+
+  it should "not fail on bounds if repetion has no lower bound" in {
+    val rule = VariableRepetition(ALPHA)
+    rule.parse("aaa", 3) should equal((3, Left(Token.Repetition(3, 3, Nil))))
+  }
+
+  "OptionalSequence" should "match sequence" in {
+    import Token.{ALPHA => A, DIGIT => D, SP => S}
+    val rule = OptionalSequence(ALPHA, SP, DIGIT)
+    rule.parse("xxxa 1yyy", 3) should equal((6, Left(Token.OptionalSequence(3, 6, List(A(3), S(4), D(5))))))
+  }
+
+  it should "match lack of a sequence" in {
+    val rule = OptionalSequence(ALPHA, SP, DIGIT)
+    rule.parse("xxxa ayyy", 3) should equal((3, Left(Token.OptionalSequence(3, 3, Nil))))
+  }
+
+  it should "fail to parse on out of bounds request" in {
+    val rule = OptionalSequence(ALPHA, SP, DIGIT)
+    rule.parse("aaa", 3) should equal((3, Left(Token.OptionalSequence(3, 3, Nil))))
+  }
+
+  def parseFailures(rule: Rule, input: String, failRule: Option[Rule] = None): Unit = {
 
     it should "not parse improper input" in {
-      rule.parse(input, 0) should equal((0, Right(rule)))
+
+      rule.parse(input, 0) should equal((0, Right(failRule.getOrElse(rule))))
     }
 
-    it should "fail to parse on out of bounds request" in {
+    it should "not fail to parse on out of bounds request" in {
       rule.parse(input, input.length) should equal((input.length, Right(rule)))
     }
   }

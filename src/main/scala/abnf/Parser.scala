@@ -1,7 +1,7 @@
 package abnf
 
 trait Token {
-  /**  Inclusive start offset of match. */
+  /** Inclusive start offset of match. */
   def start: Int
 
   /** Exclusive end offset of match. */
@@ -47,7 +47,8 @@ object Token {
 }
 
 trait Rule {
-  // TODO: Instead of Option[(Int,Token)] consider (Int,Either[Token,Rule]) to communicate where it failed and on what
+
+  // TODO: This should have an end as well, so you can parse in a fixed substring
   def parse(input: String, position: Int): (Int, Either[Token, Rule])
 
   def checkBounds(input: String, position: Int, rule: Rule)(f: => (Int, Either[Token, Rule])) =
@@ -127,15 +128,24 @@ object Rule {
   }
 
   class VariableRepetition(rule: Rule, lower: Option[Int] = None, upper: Option[Int] = None) extends Rule {
-    override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = checkBounds(input, position, this) {
+    override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = {
+
+      // Note: Unlike other Rules, a Repetition that is allowed to match 0 times will return Left() on hitting input
+      // bounds
       val l = lower.getOrElse(0)
       val u = upper.getOrElse(Int.MaxValue)
       if (l < 0 || l > u || u == 0)
+
+      // Note: Should there be a different way to signal that the rule's definition is invalid?
         (position, Right(this))
       else {
         import Token.Repetition
         def parse(i: Int, p: Int, r: List[Token]): (Int, Either[Token, Rule]) = {
-          if (i >= u) {
+          if (p >= input.length) {
+            if(r.nonEmpty && r.length >= l) (p, Left(Repetition(position, p, r.reverse)))
+            else if (l == 0) (position, Left(Repetition(position, position, Nil)))
+            else (p, Right(rule))
+          } else if (i >= u) {
             (p, Left(Repetition(position, p, r.reverse)))
           } else {
             rule.parse(input, p) match {
