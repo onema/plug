@@ -16,7 +16,7 @@ class RuleSpec extends FlatSpec with Matchers {
   }
 
   "CRLF" should "match \r\n linefeed" in {
-    CRLF.parse("x\r\ny", 1) should equal((3,Left(Token.CRLF(1,3))))
+    CRLF.parse("x\r\ny", 1) should equal((3, Left(Token.CRLF(1, 3))))
   }
 
   it should behave like parseFailures(DIGIT, "abcdef")
@@ -133,6 +133,34 @@ class RuleSpec extends FlatSpec with Matchers {
   it should "fail to parse on out of bounds request" in {
     val rule = OptionalSequence(ALPHA, SP, DIGIT)
     rule.parse("aaa", 3) should equal((3, Left(Token.OptionalSequence(3, 3, Nil))))
+  }
+
+  "CustomRule" should "act as a pass through without overrides" in {
+    val rule = new CustomRule(Terminal("abc")) {}
+
+    rule.parse("xxxabcyyy", 3) should equal(6, Left(Token.Terminal(3, 6, "abc")))
+  }
+
+  it should "pass through if matcher misses" in {
+    case class Never(start: Int, end: Int) extends Token
+    val rule = new CustomRule(Terminal("abc")) {
+      override def matcher(input: String, position: Int): PartialFunction[(Int, Either[Token, Rule]), (Int, Either[Token, Rule])] = {
+        case (p, Left(t@Token.Single(s))) => (p, Left(Never(s, t.end)))
+      }
+    }
+
+    rule.parse("xxxabcyyy", 3) should equal(6, Left(Token.Terminal(3, 6, "abc")))
+  }
+
+  it should "allow replacement of match" in {
+    case class StartsWithF(start: Int, end: Int, value: String) extends Token
+    val rule = new CustomRule(Concatenation(Single('F'), VariableRepetition(ALPHA, Some(1)))) {
+      override def matcher(input: String, position: Int): PartialFunction[(Int, Either[Token, Rule]), (Int, Either[Token, Rule])] = {
+        case (p, Left(Token.Concatenation(s, e, _))) => (p, Left(StartsWithF(s,e,input.substring(s,e))))
+      }
+    }
+
+    rule.parse("Foobar", 0) should equal(6, Left(StartsWithF(0,6,"Foobar")))
   }
 
   def parseFailures(rule: Rule, input: String, failRule: Option[Rule] = None): Unit = {

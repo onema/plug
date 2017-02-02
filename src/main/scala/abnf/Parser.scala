@@ -57,6 +57,20 @@ trait Rule {
 
 }
 
+class CustomRule(wrapped: Rule) extends Rule {
+  def matcher(input: String, position: Int): PartialFunction[(Int, Either[Token, Rule]), (Int, Either[Token, Rule])] =
+    new PartialFunction[(Int, Either[Token, Rule]), (Int, Either[Token, Rule])] {
+      override def isDefinedAt(x: (Int, Either[Token, Rule])): Boolean = false
+
+      override def apply(v1: (Int, Either[Token, Rule])): (Int, Either[Token, Rule]) = v1
+    }
+
+  val default: PartialFunction[(Int, Either[Token, Rule]), (Int, Either[Token, Rule])] = { case x => x }
+  override def parse(input: String, position: Int): (Int, Either[Token, Rule]) =
+    (matcher(input, position) orElse default) (wrapped.parse(input, position))
+
+}
+
 object Rule {
 
   object Alternative {
@@ -142,7 +156,7 @@ object Rule {
         import Token.Repetition
         def parse(i: Int, p: Int, r: List[Token]): (Int, Either[Token, Rule]) = {
           if (p >= input.length) {
-            if(r.nonEmpty && r.length >= l) (p, Left(Repetition(position, p, r.reverse)))
+            if (r.nonEmpty && r.length >= l) (p, Left(Repetition(position, p, r.reverse)))
             else if (l == 0) (position, Left(Repetition(position, position, Nil)))
             else (p, Right(rule))
           } else if (i >= u) {
