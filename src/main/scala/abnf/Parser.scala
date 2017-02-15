@@ -65,9 +65,34 @@ class CustomRule(wrapped: Rule) extends Rule {
       override def apply(v1: (Int, Either[Token, Rule])): (Int, Either[Token, Rule]) = v1
     }
 
-  val default: PartialFunction[(Int, Either[Token, Rule]), (Int, Either[Token, Rule])] = { case x => x }
+  val default: PartialFunction[(Int, Either[Token, Rule]), (Int, Either[Token, Rule])] = {
+    case x => x
+  }
+
   override def parse(input: String, position: Int): (Int, Either[Token, Rule]) =
     (matcher(input, position) orElse default) (wrapped.parse(input, position))
+
+}
+
+class CustomRule2(wrapped: Rule)
+                 (matcher: (String, Int) => PartialFunction[(Int, Either[Token, Rule]), (Int, Either[Token, Rule])])
+  extends Rule {
+
+  val default: PartialFunction[(Int, Either[Token, Rule]), (Int, Either[Token, Rule])] = {
+    case x => x
+  }
+
+  override def parse(input: String, position: Int): (Int, Either[Token, Rule]) =
+    (matcher(input, position) orElse default) (wrapped.parse(input, position))
+
+}
+abstract class CustomRule3(wrapped: Rule) extends Rule {
+  def intercept(input: String, start: Int, end: Int, token: Token): Either[Token, Rule]
+
+  override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = wrapped.parse(input,position) match {
+    case (end, Left(token)) => (end, intercept(input,position,end,token))
+    case x => x
+  }
 
 }
 

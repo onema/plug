@@ -154,13 +154,35 @@ class RuleSpec extends FlatSpec with Matchers {
 
   it should "allow replacement of match" in {
     case class StartsWithF(start: Int, end: Int, value: String) extends Token
+
     val rule = new CustomRule(Concatenation(Single('F'), VariableRepetition(ALPHA, Some(1)))) {
       override def matcher(input: String, position: Int): PartialFunction[(Int, Either[Token, Rule]), (Int, Either[Token, Rule])] = {
-        case (p, Left(Token.Concatenation(s, e, _))) => (p, Left(StartsWithF(s,e,input.substring(s,e))))
+        case (p, Left(Token.Concatenation(s, e, _))) => (p, Left(StartsWithF(s, e, input.substring(s, e))))
       }
     }
 
-    rule.parse("Foobar", 0) should equal(6, Left(StartsWithF(0,6,"Foobar")))
+    rule.parse("Foobar", 0) should equal(6, Left(StartsWithF(0, 6, "Foobar")))
+  }
+
+  it should "replace match" in {
+    case class StartsWithF(start: Int, end: Int, value: String) extends Token
+
+    val rule = new CustomRule2(Concatenation(Single('F'), VariableRepetition(ALPHA, Some(1))))((input, position) => {
+      case (p, Left(Token.Concatenation(s, e, _))) => (p, Left(StartsWithF(s, e, input.substring(s, e))))
+    })
+
+    rule.parse("Foobar", 0) should equal(6, Left(StartsWithF(0, 6, "Foobar")))
+  }
+
+  it should "intercept match" in {
+    case class StartsWithF(start: Int, end: Int, value: String) extends Token
+
+    val rule = new CustomRule3(Concatenation(Single('F'), VariableRepetition(ALPHA, Some(1)))) {
+      override def intercept(input: String, start: Int, end: Int, matched: Token): Either[Token, Rule] =
+        Left(StartsWithF(start, end, input.substring(start, end)))
+    }
+
+    rule.parse("Foobar", 0) should equal(6, Left(StartsWithF(0, 6, "Foobar")))
   }
 
   def parseFailures(rule: Rule, input: String, failRule: Option[Rule] = None): Unit = {
