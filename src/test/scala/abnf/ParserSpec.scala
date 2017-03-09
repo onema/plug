@@ -12,7 +12,7 @@ class ParserSpec extends FlatSpec with Matchers {
         |San Diego, CA 92101-1234
       """.stripMargin
     val expected = Left(Token.Concatenation(1, 2, List(
-      Name(3,4,"Joe F. Smith III"),
+      Name(3, 4, "Joe F. Smith III"),
       Street(8, 9, "123 Main Street Apt 5a"),
       Token.Concatenation(10, 11, List(
         TownName(10, 11, "San Diego"), Token.Terminal(12, 13, ","),
@@ -31,10 +31,22 @@ class ParserSpec extends FlatSpec with Matchers {
     actual should equal(expected)
   }
 
+  it should "parse PersonalPart" in {
+    import Token.{ALPHA => A, Terminal => T}
+    val token = Token.Concatenation(0, 2, List(A(0), T(1, 2, ".")))
+    PostalGrammar.PersonalPart.parse("F.", 0) should equal((2, Left(token)))
+  }
+
+  it should "parse Initial" in {
+    import Token.{ALPHA => A, Terminal => T}
+    val token = Token.Concatenation(0, 2, List(A(0), T(1, 2, ".")))
+    PostalGrammar.Initial.parse("F.", 0) should equal((2, Left(token)))
+  }
+
   it should "parse StreetPart" in {
     import PostalAddressTokens._
-    val expected = Left(Street(1, 12, "123 Main Street Apt 5a"))
-    val actual = Parser.parse("123 Main Street Apt 5a\n", PostalGrammar.StreetPart)
+    val expected = Left(Street(0, 19, "5 123a Main Street"))
+    val actual = Parser.parse("5 123a Main Street\n", PostalGrammar.StreetPart)
     actual should equal(expected)
   }
 
@@ -69,6 +81,27 @@ class ParserSpec extends FlatSpec with Matchers {
 
     actual should equal(expected)
   }
+
+  "BacktrackGrammar.a.parse" should "backtrack on failure in alternative" in {
+    val text = "x,y."
+    val expected = Left(4, Token.Concatenation(0, 4, List(Token.Terminal(0, 3, "x,y"), Token.Terminal(3, 4, "."))))
+    BacktrackGrammar.A.parse(text, 0) should equal(expected)
+  }
+}
+
+object BacktrackGrammar {
+
+  import Rule._
+
+  // a = (b1 / b2) "."
+  case object A extends Concatenation(Alternative(B1, B2), Terminal("."))
+
+  // b1 = *ALPHA
+  case object B1 extends VariableRepetition(ALPHA)
+
+  // b2 = "x,y"
+  case object B2 extends Terminal("x,y")
+
 }
 
 object PostalGrammar {
@@ -90,9 +123,9 @@ object PostalGrammar {
     Concatenation(PersonalPart, NewLine)
   )) {
     override def intercept(input: String, start: Int, end: Int, token: Token) = token match {
-      case Token.Concatenation(_, _, List(_, _, _, _, x)) =>
+      case Token.Concatenation(_, _, y: List[Token]) =>
+        val x = y.reverse.head
         Left(PostalAddressTokens.Name(start, end, input.substring(start, x.start)))
-
     }
   }
 
@@ -137,7 +170,7 @@ object PostalGrammar {
   case object HouseNum extends VariableRepetition(Alternative(DIGIT, ALPHA), Some(1), Some(8))
 
   //street-name      = 1*VCHAR
-  case object StreetName extends VariableRepetition(VCHAR, Some(1))
+  case object StreetName extends VariableRepetition(Alternative(VCHAR, SP), Some(1))
 
   //zip-part         = town-name "," SP state 1*2SP zip-code newline
   case object ZipPart extends CustomRule3(Concatenation(

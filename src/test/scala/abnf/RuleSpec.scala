@@ -52,7 +52,7 @@ class RuleSpec extends FlatSpec with Matchers {
   }
 
   it should "match possibilities from left to right" in {
-    val alt = Alternative(Terminal("abcdef"), Terminal("abc"), Terminal("abcdefg"))
+    val alt = Alternative(Terminal("xyz"), Terminal("abcdef"), Terminal("abc"), Terminal("abcdefg"))
     alt.parse("xxxabcdefgxyz", 3) should equal(9, Left(Token.Terminal(3, 9, "abcdef")))
   }
 
