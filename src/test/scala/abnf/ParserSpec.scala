@@ -1,7 +1,7 @@
 package abnf
 
 import org.scalatest.{FlatSpec, Matchers}
-
+/*
 class ParserSpec extends FlatSpec with Matchers {
 
   "parse" should "return a Token tree for postal address" in {
@@ -243,3 +243,4 @@ object PostalAddressTokens {
   case class ZipCode(start: Int, end: Int, zip: Int, plus4: Option[Int]) extends Token
 
 }
+*/

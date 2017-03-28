@@ -10,7 +10,7 @@ object CookieDateParser {
 
   case object HmsTime extends Concatenation(TimeField, Terminal(":"), TimeField, Terminal(":"), TimeField)
 
-  case object NonDigit extends Alternative(Range(0x00, 0x2f), Range(0x3a, 0xff))
+  case object NonDigit extends Alternative(Range(0x00, 0x2f, ), Range(0x3a, 0xff))
 
   case object Time extends Concatenation(HmsTime, Concatenation(NonDigit, VariableRepetition(OCTET)))
 
