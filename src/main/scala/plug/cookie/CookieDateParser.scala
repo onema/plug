@@ -2,6 +2,7 @@ package plug.cookie
 
 import org.joda.time.DateTime
 
+/*
 object CookieDateParser {
 
   import abnf.Rule._
@@ -57,4 +58,5 @@ object CookieDateParser {
   )
 
 }
+*/
 

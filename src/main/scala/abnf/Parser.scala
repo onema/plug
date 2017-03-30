@@ -1,5 +1,7 @@
 package abnf
 
+import java.util.Locale
+
 trait Token
 
 object Token {
@@ -33,6 +35,7 @@ object Token {
   object BIT {
     def apply(c: Char) = new BIT(c == '1')
   }
+
   case class BIT(set: Boolean) extends Token
 
   case class CHAR(c: Char) extends Token
@@ -129,32 +132,42 @@ object Rule {
   }
 
   object Concatenation {
-    def apply(rules: Rule*): Concatenation = new Concatenation(rules: _*)
+    def apply(rules: Rule*): Concatenation = new Concatenation(rules: _*)()
+    def apply(rules: Rule*)(converter: Token => Token): Concatenation = new Concatenation(rules: _*)(Some(converter))
   }
 
-  class Concatenation(rules: Rule*) extends Rule {
+  class Concatenation(rules: Rule*)(converter: Option[Token => Token] = None) extends Rule {
 
-    class ConcatentionParser(parser: RuleParser, rules: Seq[Rule], tokens: List[Token], previousMatch: Option[Token]) extends RuleParser {
+    class ConcatentionParser(parser: RuleParser, rules: List[Rule], tokens: List[Token], previousMatch: Option[Token]) extends RuleParser {
+
+      def buildMatch(token: Token) = {
+        val t = Token.Concatenation((token :: tokens).reverse)
+        Match(converter match {
+          case Some(f) => f(t)
+          case None => t
+        })
+      }
 
       override def parse(input: Char): ParseResult = parser.parse(input) match {
-        case x:Error => previousMatch match {
+        case x@Error => previousMatch match {
           case None => x
           case Some(token) => rules match {
-            case Nil => Match(Token.Concatenation((token::tokens).reverse))
-            case head::tail => Partial(new ConcatentionParser(head.getParser, tail, token::tokens, None))
+            case Nil => buildMatch(token)
+            case head :: tail => Partial(new ConcatentionParser(head.getParser, tail, token :: tokens, None))
           }
         }
         case Partial(parser1) => Partial(new ConcatentionParser(parser1, rules, tokens, previousMatch))
         case Match(token, None) => rules match {
-          case Nil => Match(Token.Concatenation((token::tokens).reverse))
-          case head::tail => Partial(new ConcatentionParser(head.getParser, tail, token::tokens, previousMatch))
+          case Nil => buildMatch(token)
+          case head :: tail => Partial(new ConcatentionParser(head.getParser, tail, token :: tokens, previousMatch))
         }
         case Match(token, Some(parser1)) => Partial(new ConcatentionParser(parser1, rules, tokens, Some(token)))
       }
 
       override def rule: Rule = Concatenation.this
     }
-    override def getParser: RuleParser = new ConcatentionParser(rules.head.getParser, rules.tail, Nil, None)
+
+    override def getParser: RuleParser = new ConcatentionParser(rules.head.getParser, rules.tail.toList, Nil, None)
   }
 
   object OptionalSequence {
@@ -162,13 +175,13 @@ object Rule {
   }
 
   class OptionalSequence(rules: Rule*) extends VariableRepetition(Concatenation(rules: _*), None, Some(1)) {
-//    override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = super.parse(input, position) match {
-//      case (p, Left(Token.Repetition(s, e, List(Token.Concatenation(_, _, ts))))) =>
-//        (p, Left(Token.OptionalSequence(s, e, ts)))
-//      case (p, Left(Token.Repetition(s, e, Nil))) =>
-//        (p, Left(Token.OptionalSequence(s, e, Nil)))
-//      case (p, Right(_)) => (p, Right(this))
-//    }
+    //    override def parse(input: String, position: Int): (Int, Either[Token, Rule]) = super.parse(input, position) match {
+    //      case (p, Left(Token.Repetition(s, e, List(Token.Concatenation(_, _, ts))))) =>
+    //        (p, Left(Token.OptionalSequence(s, e, ts)))
+    //      case (p, Left(Token.Repetition(s, e, Nil))) =>
+    //        (p, Left(Token.OptionalSequence(s, e, Nil)))
+    //      case (p, Right(_)) => (p, Right(this))
+    //    }
     override def getParser: RuleParser = ???
   }
 
@@ -187,14 +200,16 @@ object Rule {
   }
 
   object Terminal {
-    def apply(value: String): Terminal = new Terminal(value)
+    def apply(value: String): Terminal = new Terminal(value)()
+    def apply(value: String)(converter: Token.Terminal => Token): Terminal = new Terminal(value)(Some(converter))
+
   }
 
-  class Terminal(value: String) extends Rule {
+  class Terminal(value: String)(converter: Option[Token.Terminal => Token] = None) extends Rule {
 
     class TerminalParser(position: Int) extends RuleParser {
       override def parse(input: Char): ParseResult =
-        if (value.charAt(position) != input) Error
+        if (Character.toLowerCase(value.charAt(position)) != Character.toLowerCase(input)) Error
         else if (position + 1 == value.length) Match(Token.Terminal(value))
         else Partial(new TerminalParser(position + 1))
 
@@ -205,7 +220,7 @@ object Rule {
   }
 
   object Range {
-    def apply(lower: Char, upper: Char, token: Char => Token): Range = new Range(lower, upper, token)
+    def apply(lower: Char, upper: Char, token: Char => Token = Token.Single): Range = new Range(lower, upper, token)
   }
 
   class Range(lower: Char, upper: Char, token: Char => Token) extends Rule {
@@ -232,7 +247,7 @@ object Rule {
   case object ALPHA extends Alternative(Range(0x41, 0x5a, Token.ALPHA), Range(0x61, 0x7a, Token.ALPHA))
 
   // BIT            =  "0" / "1"
-  case object BIT extends Range(0x30,0x31, Token.BIT.apply)
+  case object BIT extends Range(0x30, 0x31, Token.BIT.apply)
 
   // CHAR           =  %x01-7F
   // any 7-bit US-ASCII character, excluding NUL
@@ -242,14 +257,14 @@ object Rule {
   case object CR extends Single(0x0d, c => Token.CR)
 
   // Internet standard newline
-  case object CRLF extends Concatenation(CR, LF)
+  case object CRLF extends Concatenation(CR, LF)(Some(_ => Token.CRLF))
 
   //  CTL            =  %x00-1F / %x7F
   // controls
   case object CTL extends Alternative(Range(0x00, 0x1f, Token.CTL), Single(0x7f, Token.CTL))
 
   // 0-9
-  case object DIGIT extends Range(0x30, 0x39, c => Token.DIGIT(c.toInt))
+  case object DIGIT extends Range(0x30, 0x39, c => Token.DIGIT(c.toString.toInt))
 
   // " (Double Quote)
   case object DQUOTE extends Single(0x22, c => Token.DQUOTE)
@@ -270,7 +285,7 @@ object Rule {
   //  Do not use when defining mail
   //   headers and use with caution in
   //   other contexts.
-  case object LWSP extends VariableRepetition(Alternative(WSP, Concatenation(CRLF,WSP)))
+  case object LWSP extends VariableRepetition(Alternative(WSP, Concatenation(CRLF, WSP)))
 
   // 8 bits of data
   case object OCTET extends Range(0x00, 0xff, Token.OCTET)
