@@ -3,6 +3,8 @@ package abnf
 import abnf.Rule._
 import org.scalatest.{FlatSpec, Matchers}
 
+import scala.collection.GenTraversableOnce
+
 class RuleSpec extends FlatSpec with Matchers {
 
   //  "ALPHA" should "parse alpha from position in string" in {
@@ -44,24 +46,13 @@ class RuleSpec extends FlatSpec with Matchers {
     parseString(
       Concatenation(Terminal("bob"), SP, Terminal("smith")),
       "Bob Smith",
-      List(P, P, M(Token.Concatenation(List(Token.Terminal("bob"), Token.SP, Token.Terminal("smith"))))))
+      List(Pn(8), M(Token.Concatenation(List(Token.Terminal("bob"), Token.SP, Token.Terminal("smith"))))))
 
-  //  "Concatenation" should "match an exact series" in {
-  //    import Token.{ALPHA => A}
-  //    val con = Concatenation(Terminal("Bob"), SP, VariableRepetition(ALPHA, Some(1)))
-  //    val token = Token.Concatenation(3, 12, List(
-  //      Token.Terminal(3, 6, "Bob"),
-  //      Token.SP(6),
-  //      Token.Repetition(7, 12, List(A(7), A(8), A(9), A(10), A(11)))
-  //    ))
-  //    con.parse("   Bob Smith   ", 3) should equal((12, Left(token)))
-  //  }
-
-  //  it should "report first part that fails match" in {
-  //    Concatenation(ALPHA, SP).parse("...aa   ", 3) should equal((4, Right(SP)))
-  //  }
-  //
-  //  it should behave like parseFailures(Concatenation(ALPHA, SP), "--------", Some(ALPHA))
+  it should "fail at first mismatch" in
+    parseString(
+      Concatenation(Terminal("bob"), SP, Terminal("smith")),
+      "Bob Thmith",
+      List(Pn(4), E))
 
   "DIGIT" should "parse number from char" in {
     DIGIT.getParser.parse('5') should equal(Match(Token.DIGIT(5)))
@@ -195,25 +186,22 @@ class RuleSpec extends FlatSpec with Matchers {
   //  }
 
   def parseString(rule: Rule, input: String, expected: List[ParseTest]): Unit = {
-    def parse(stream: List[Char], parser: RuleParser, expected2: List[(ParseTest,Int)]): Unit = stream match {
-      case Nil =>
-      case head :: tail =>
-        val (ehead,idx) :: etail = expected2
-        parser.parse(head) match {
-          case Partial(p) =>
-            if (ehead == P) parse(tail, p, etail)
-            else fail(s"$idx: $ehead != P")
-          case Match(token, None) =>
-            if (ehead != M(token)) fail(s"$ehead != ${M(token)}")
-            else if (etail.nonEmpty) fail(s"$idx: Final match on $ehead, but expected not empty: $etail")
-          case Match(token, Some(p)) =>
-            if (ehead != MC(token)) fail(s"$ehead != ${MC(token)}")
-            else if (etail.isEmpty) fail(s"$idx: Non-final match on $ehead, but no more expected")
-            else parse(tail, p, etail)
-          case Error => if (ehead != E) fail(s"$idx: $ehead != E")
-        }
+    implicit val flattener: ParseTest => GenTraversableOnce[ParseTest] = {
+      case x: Pn => x.xs
+      case x => x :: Nil
     }
-    parse(input.toList, rule.getParser, expected.zipWithIndex)
+
+    def parse(stream: List[Char], parser: RuleParser, acc: List[ParseTest]): List[ParseTest] = stream match {
+      case Nil => acc
+      case head :: tail => parser.parse(head) match {
+        case Partial(p) => parse(tail, p, P :: acc)
+        case Match(t, None) => M(t) :: acc
+        case Match(t, Some(p)) => parse(tail, p, M(t) :: acc)
+        case Error => E :: acc
+      }
+    }
+    val actual = parse(input.toList, rule.getParser, Nil).reverse
+    actual should equal(expected.flatten)
   }
 
 }
@@ -228,4 +216,8 @@ case class M(token: Token) extends ParseTest
 
 case class MC(token: Token) extends ParseTest
 
+object Pn {
+  def apply(n: Int): Pn = Pn((0 until n).map(_ => P))
+}
 
+case class Pn(xs: Seq[ParseTest]) extends ParseTest
